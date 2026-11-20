@@ -4,7 +4,7 @@
   "type": "module",
   "description": "TRAPPIST-1 in 3D: direct N-body dynamics from Agol et al. 2021 and JWST-informed procedural worlds.",
   "scripts": {
-    "serve": "python -m http.server 8124",
+    "serve": "python tools/serve.py 8124",
     "verify": "node tools/verify-transits.mjs"
   }
 }

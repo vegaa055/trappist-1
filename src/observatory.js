@@ -1,15 +1,16 @@
 // The observatory drawer: light curve, transit-timing variations, timeline.
 
-import { drawLightCurve, drawTTV } from './plots.js';
+import { drawLightCurve, drawTTV, drawLaplace } from './plots.js';
 import { BANDS, centralDepths } from './observe.js';
 import { TIMELINE } from './observations.js';
 import { PLANETS } from './data.js';
 
-export function createObservatory({ settings, photometer, getDetector, markers, epochJD, onBand }) {
+export function createObservatory({ settings, photometer, getDetector, getLaplace, markers, epochJD, onBand }) {
   const $ = (id) => document.getElementById(id);
   const root = $('observatory');
   const lcCanvas = $('lc-canvas');
   const ttvCanvas = $('ttv-canvas');
+  const lapCanvas = $('lap-canvas');
   const lcNote = $('lc-note');
   const hiddenTTV = new Set();
   let tab = 'lc';
@@ -17,15 +18,14 @@ export function createObservatory({ settings, photometer, getDetector, markers, 
   let windowDays = 1;
 
   // ------------------------------------------------------------- tabs
-  for (const btn of root.querySelectorAll('.tab')) {
-    btn.addEventListener('click', () => {
-      tab = btn.dataset.tab;
-      for (const b of root.querySelectorAll('.tab')) b.classList.toggle('is-active', b === btn);
-      for (const pane of root.querySelectorAll('[data-pane]')) pane.hidden = pane.dataset.pane !== tab;
-      $('lc-tools').hidden = tab !== 'lc';
-      lcTimer = ttvTimer = 0;
-    });
+  function selectTab(name) {
+    tab = name;
+    for (const b of root.querySelectorAll('.tab')) b.classList.toggle('is-active', b.dataset.tab === name);
+    for (const pane of root.querySelectorAll('[data-pane]')) pane.hidden = pane.dataset.pane !== name;
+    $('lc-tools').hidden = name !== 'lc';
+    lcTimer = ttvTimer = 0;
   }
+  for (const btn of root.querySelectorAll('.tab')) btn.addEventListener('click', () => selectTab(btn.dataset.tab));
 
   for (const chip of root.querySelectorAll('.chip[data-band]')) {
     chip.addEventListener('click', () => {
@@ -82,6 +82,12 @@ export function createObservatory({ settings, photometer, getDetector, markers, 
         ttvTimer = 0.5;
         drawTTV(ttvCanvas, getDetector(), { epochJD, hidden: hiddenTTV });
       }
+    } else if (tab === 'laplace') {
+      ttvTimer -= dtWall;
+      if (ttvTimer <= 0) {
+        ttvTimer = 0.5;
+        drawLaplace(lapCanvas, getLaplace(), { epochJD, labels: ['bcd', 'cde', 'def', 'efg', 'fgh'] });
+      }
     }
   }
 
@@ -94,6 +100,7 @@ export function createObservatory({ settings, photometer, getDetector, markers, 
   return {
     update,
     sync,
+    selectTab,
     setBand(id) { $('lc-depths').textContent = `central transit depths: ${depthsText(id)}`; },
   };
 }

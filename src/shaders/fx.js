@@ -142,13 +142,152 @@ export const TRAIL_FRAG = /* glsl */ `
 precision highp float;
 uniform vec3 uColor;
 uniform float uOpacity;
+uniform float uFill;      // (capacity − 1) / (filled − 1): fade over what exists
 varying float vAge;
 #include <common>
 #include <logdepthbuf_pars_fragment>
 void main() {
   #include <logdepthbuf_fragment>
-  float a = pow(clamp(vAge, 0.0, 1.0), 2.0) * uOpacity;
+  float a = pow(clamp(vAge * uFill, 0.0, 1.0), 2.0) * uOpacity;
   if (a < 0.002) discard;
   gl_FragColor = vec4(uColor * a, a);
 }
 `;
+
+// ------------------------------------------------------------------- sky --
+// Sky dome for standing on a planet with air: a small inverted sphere around
+// the camera, a little beyond the horizon so the ground hides its lower half.
+// Brighter toward the horizon (longer path through the air), a glow around
+// the star, and a twilight tint when the star is low.
+
+const SKY_VERT = /* glsl */ `
+varying vec3 vWorld;
+#include <common>
+#include <logdepthbuf_pars_vertex>
+void main() {
+  vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+  gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
+  #include <logdepthbuf_vertex>
+}
+`;
+
+const SKY_FRAG = /* glsl */ `
+precision highp float;
+uniform vec3 uUp;
+uniform vec3 uStarDir;
+uniform vec3 uColor;
+uniform vec3 uSunset;
+uniform float uStrength;
+varying vec3 vWorld;
+#include <common>
+#include <logdepthbuf_pars_fragment>
+void main() {
+  #include <logdepthbuf_fragment>
+  vec3 d = normalize(vWorld - cameraPosition);
+  float h = dot(d, uUp);
+  float s = dot(uStarDir, uUp);
+  float day = smoothstep(-0.12, 0.3, s);
+  float air = pow(1.0 - max(h, 0.0), 3.0);
+  float around = pow(max(dot(d, uStarDir), 0.0), 10.0);
+  float low = smoothstep(-0.2, 0.05, s) * (1.0 - smoothstep(0.0, 0.5, s));
+  vec3 col = uColor * (0.22 + 0.78 * air) * day
+           + uColor * around * 0.7 * day
+           + uSunset * (around * 1.5 + air * 0.4) * low;
+  // No cut at the horizon: from a few km up the true horizon dips ~0.04 rad, and
+  // the ground (nearer than the dome) hides everything below it anyway.
+  gl_FragColor = vec4(col * uStrength, 1.0);
+}
+`;
+
+export function createSkyDome() {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uUp: { value: new THREE.Vector3(0, 1, 0) },
+      uStarDir: { value: new THREE.Vector3(1, 0, 0) },
+      uColor: { value: new THREE.Color() },
+      uSunset: { value: new THREE.Color() },
+      uStrength: { value: 1 },
+    },
+    vertexShader: SKY_VERT,
+    fragmentShader: SKY_FRAG,
+    side: THREE.BackSide,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), mat);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 20;
+  mesh.visible = false;
+  return mesh;
+}
+
+// --------------------------------------------------------- conjunction spokes --
+// One radial segment per conjunction, from the inner planet's orbit to the
+// outer one's, fading over `uLife` simulated days.
+
+const SPOKE_VERT = /* glsl */ `
+attribute float aBirth;
+attribute vec3 aColor;
+uniform float uNow;
+uniform float uLife;
+varying float vFade;
+varying vec3 vColor;
+#include <common>
+#include <logdepthbuf_pars_vertex>
+void main() {
+  vFade = 1.0 - clamp((uNow - aBirth) / uLife, 0.0, 1.0);
+  vColor = aColor;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  #include <logdepthbuf_vertex>
+}
+`;
+
+const SPOKE_FRAG = /* glsl */ `
+precision highp float;
+varying float vFade;
+varying vec3 vColor;
+#include <common>
+#include <logdepthbuf_pars_fragment>
+void main() {
+  #include <logdepthbuf_fragment>
+  if (vFade <= 0.0) discard;
+  float a = vFade * vFade * 0.85;
+  gl_FragColor = vec4(vColor * a, a);
+}
+`;
+
+export function createConjunctionSpokes(capacity = 3000) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(capacity * 6), 3));
+  geo.setAttribute('aColor', new THREE.BufferAttribute(new Float32Array(capacity * 6), 3));
+  geo.setAttribute('aBirth', new THREE.BufferAttribute(new Float32Array(capacity * 2).fill(-1e9), 1));
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uNow: { value: 0 }, uLife: { value: 491 } },
+    vertexShader: SPOKE_VERT,
+    fragmentShader: SPOKE_FRAG,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const lines = new THREE.LineSegments(geo, mat);
+  lines.frustumCulled = false;
+  lines.userData = { capacity, next: 0 };
+  return lines;
+}
+
+// ------------------------------------------------------------- Sun marker --
+// The Sun as seen from TRAPPIST-1: a faint (V ≈ 5.3) yellow-white star lying
+// exactly along our line of sight — toward Earth.
+
+export function createSunMarker() {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3));
+  const mat = new THREE.PointsMaterial({
+    color: new THREE.Color(1.0, 0.95, 0.82), size: 3, sizeAttenuation: false,
+    transparent: true, opacity: 0.9, depthWrite: false,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  return pts;
+}

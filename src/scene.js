@@ -11,6 +11,9 @@ import { UNITS_PER_AU, AU_KM, AUD_TO_KMS } from './constants.js';
 import { STAR, PLANETS, BODY_BY_ID } from './data.js';
 import { sampleOrbitEllipse, stateToElements } from './orbital.js';
 import { primaryMu, radiusAU, EARTH_DIR } from './system.js';
+import { PATTERN_PERIOD } from './resonance.js';
+
+const PATTERN_OMEGA = (2 * Math.PI) / PATTERN_PERIOD;   // rad per day
 import {
   habitableZone, bareRockDaysideTemp, equilibriumTemp, starAngularDiameter,
 } from './habitable.js';
@@ -21,9 +24,11 @@ import { StellarActivity, MAX_SPOTS, MAX_FLARES } from './activity.js';
 import { createStarfield, createMilkyWay } from './shaders/stars.js';
 import {
   createGlowMaterial, GLOW_EXTENT, createHabitableZone, TRAIL_VERT, TRAIL_FRAG,
+  createSkyDome, createSunMarker, createConjunctionSpokes,
 } from './shaders/fx.js';
 
-const TRAIL_POINTS = 720;
+const TRAIL_POINTS = 1500;
+const PAIR_COLORS = ['#ff9a6a', '#ffd166', '#c8e86a', '#6fd3a0', '#5ec5e8', '#a98bff'];
 
 export const toScene = (v, out) => (out ? out.set(v[0], -v[2], v[1]) : [v[0], -v[2], v[1]]);
 
@@ -79,6 +84,13 @@ export class TrappistScene {
     this.scene.add(this.hzMesh);
 
     this._buildEarthMarker();
+
+    this.sky = createSkyDome();
+    this.sunMarker = createSunMarker();
+    this.spokes = createConjunctionSpokes();
+    this.spokes.visible = false;
+    this.scene.add(this.sky, this.sunMarker, this.spokes);
+    this.surfaceInfo = null;      // set by main when standing on a planet
 
     this.starWorld = new THREE.Vector3();
     this.starDrawRadius = 1;
@@ -191,7 +203,7 @@ export class TrappistScene {
     geo.setAttribute('aAge', new THREE.BufferAttribute(ages, 1));
     geo.setDrawRange(0, 0);
     const mat = new THREE.ShaderMaterial({
-      uniforms: { uColor: { value: new THREE.Color(body.uiColor) }, uOpacity: { value: 0.9 } },
+      uniforms: { uColor: { value: new THREE.Color(body.uiColor) }, uOpacity: { value: 0.9 }, uFill: { value: 1 } },
       vertexShader: TRAIL_VERT,
       fragmentShader: TRAIL_FRAG,
       transparent: true,
@@ -242,9 +254,39 @@ export class TrappistScene {
     earth.innerHTML = '<span class="label__text">to the Sun &amp; JWST · 40.7 ly</span>';
     this.labelLayer.appendChild(earth);
     this.earthLabel = earth;
+
+    const sun = document.createElement('div');
+    sun.className = 'label label--earth';
+    sun.innerHTML = '<span class="label__text">the Sun · V 5.3 · in Leo</span>';
+    this.labelLayer.appendChild(sun);
+    this.sunLabel = sun;
   }
 
   // ------------------------------------------------------------------ update
+
+  /**
+   * Positions, sizes and locked spins only. A camera riding on a planet must be
+   * placed after these are current but before the frame renders, or it lags a
+   * frame behind a body moving at 50–80 km/s.
+   */
+  syncPositions() {
+    const nb = this.sim.nbody;
+    for (const body of this.sim.bodies) {
+      const view = this.views.get(body.id);
+      nb.getPosition(body.id, this._r);
+      toScene(this._r, view.renderPos).multiplyScalar(UNITS_PER_AU);
+      view.pivot.position.copy(view.renderPos);
+      view.drawRadius = this.drawRadiusOf(body);
+      view.spin.scale.setScalar(view.drawRadius);
+    }
+    const sv = this.views.get(STAR.id);
+    this.starWorld.copy(sv.renderPos);
+    this.starDrawRadius = sv.drawRadius;
+    for (const p of PLANETS) {
+      const view = this.views.get(p.id);
+      view.spin.rotation.y = Math.atan2(-(this.starWorld.z - view.renderPos.z), this.starWorld.x - view.renderPos.x);
+    }
+  }
 
   drawRadiusOf(body) {
     const s = this.settings;
@@ -403,9 +445,25 @@ export class TrappistScene {
     this.earthMarker.visible = s.showLineOfSight;
     this.earthMarker.position.copy(this.starWorld);
 
+    // Conjunction spokes for the resonance view.
+    this.spokes.visible = s.resonanceView && !s.surfaceView && !s.earthView;
+    this.spokes.position.copy(this.starWorld);
+    this.spokes.material.uniforms.uNow.value = simDays;
+    // The pattern turns once per ~491 days (prograde in the system frame,
+    // which is a negative rotation about scene +y).
+    this.spokes.rotation.y = -PATTERN_OMEGA * simDays;
+
+    // Standing on a planet: orbit overlays off; a sky if the scenario has air.
+    if (s.surfaceView) {
+      this.hzMesh.visible = false;
+      this.earthMarker.visible = false;
+    }
+    this._updateSky(camera);
+    this.sunMarker.position.copy(camera.position).add(this._tmpA.set(0, 0, 8000));
+
     // 6. Orbits and trails.
-    this.orbitGroup.visible = s.showOrbits;
-    this.trailGroup.visible = s.showTrails;
+    this.orbitGroup.visible = s.showOrbits && !s.surfaceView;
+    this.trailGroup.visible = s.showTrails && !s.surfaceView;
     this._orbitTimer -= dtWall;
     if (s.showOrbits && this._orbitTimer <= 0) {
       this._orbitTimer = 0.25;
@@ -416,6 +474,64 @@ export class TrappistScene {
 
     // 7. Labels.
     this._updateLabels(camera);
+  }
+
+  /** Record a conjunction of pair k (inner index k) at system-frame (x, y). */
+  addConjunction(k, x, y, t) {
+    const u = this.spokes.userData;
+    const geo = this.spokes.geometry;
+    const pos = geo.attributes.position.array;
+    const col = geo.attributes.aColor.array;
+    const birth = geo.attributes.aBirth.array;
+    const len = Math.hypot(x, y);
+    // Scene (x, z) = system (x, y). Store in the pattern frame: undo the
+    // group's rotation at time t so the spoke stays where it landed.
+    const ux = x / len, uz = y / len;
+    const b = PATTERN_OMEGA * t, cb = Math.cos(b), sb = Math.sin(b);
+    const dx = ux * cb + uz * sb;
+    const dz = -ux * sb + uz * cb;
+    const r1 = PLANETS[k].aAU * UNITS_PER_AU * 0.97;
+    const r2 = PLANETS[k + 1].aAU * UNITS_PER_AU * 1.03;
+    const i = u.next;
+    pos.set([dx * r1, 0, dz * r1, dx * r2, 0, dz * r2], i * 6);
+    const c = new THREE.Color(PAIR_COLORS[k]);
+    col.set([c.r, c.g, c.b, c.r, c.g, c.b], i * 6);
+    birth[i * 2] = t; birth[i * 2 + 1] = t;
+    u.next = (i + 1) % u.capacity;
+    geo.attributes.position.needsUpdate = true;
+    geo.attributes.aColor.needsUpdate = true;
+    geo.attributes.aBirth.needsUpdate = true;
+  }
+
+  clearConjunctions() {
+    const birth = this.spokes.geometry.attributes.aBirth;
+    birth.array.fill(-1e9);
+    birth.needsUpdate = true;
+  }
+
+  _updateSky(camera) {
+    const s = this.settings;
+    const info = this.surfaceInfo;
+    const view = info && this.views.get(info.id);
+    const atmo = view?.scenario.atmosphere;
+    let day = 0;
+    if (s.surfaceView && atmo && !s.thermalView) {
+      const u = this.sky.material.uniforms;
+      u.uUp.value.copy(info.up);
+      u.uStarDir.value.copy(this.starWorld).sub(camera.position).normalize();
+      u.uColor.value.set(atmo.color).multiply(STARLIGHT);
+      u.uSunset.value.set(atmo.sunset || atmo.color).multiply(STARLIGHT);
+      u.uStrength.value = 0.35 * atmo.intensity * s.exposure;
+      this.sky.position.copy(camera.position);
+      this.sky.scale.setScalar(view.drawRadius * 0.2);
+      this.sky.visible = true;
+      day = Math.max(0, Math.min(1, (u.uStarDir.value.dot(info.up) + 0.12) / 0.42)) * Math.min(1, atmo.intensity);
+    } else {
+      this.sky.visible = false;
+    }
+    // A bright daytime sky drowns the stars.
+    this.starfield.visible = s.showStars && day < 0.55;
+    this.milkyWay.material.uniforms.uIntensity.value = s.milkyWay * (1 - 0.9 * day);
   }
 
   _updateOrbits() {
@@ -459,6 +575,7 @@ export class TrappistScene {
       }
       t.positions[i * 3] = v[0]; t.positions[i * 3 + 1] = v[1]; t.positions[i * 3 + 2] = v[2];
       t.geo.setDrawRange(0, t.count);
+      t.line.material.uniforms.uFill.value = (TRAIL_POINTS - 1) / Math.max(t.count - 1, 1);
       t.geo.attributes.position.needsUpdate = true;
       t.geo.computeBoundingSphere();
     }
@@ -506,9 +623,15 @@ export class TrappistScene {
       el.classList.toggle('label--selected', s.selected === body.id);
     }
 
+    const sunWorld = camera.position.clone().add(new THREE.Vector3(0, 0, 8000));
+    const sp = this._project(sunWorld, camera, half);
+    const showSun = s.surfaceView && s.showLabels && !sp.behind;
+    this.sunLabel.style.display = showSun ? 'block' : 'none';
+    if (showSun) this.sunLabel.style.transform = `translate(-50%, -50%) translate(${sp.x}px, ${sp.y + 12}px)`;
+
     const tipWorld = this._tmpA.copy(this.earthMarkerTip).add(this.starWorld).clone();
     const tp = this._project(tipWorld, camera, half);
-    const showEarth = s.showLineOfSight && s.showLabels && !tp.behind;
+    const showEarth = s.showLineOfSight && s.showLabels && !tp.behind && !s.surfaceView && !s.earthView;
     this.earthLabel.style.display = showEarth ? 'block' : 'none';
     if (showEarth) this.earthLabel.style.transform = `translate(-50%, -50%) translate(${tp.x}px, ${tp.y}px)`;
   }

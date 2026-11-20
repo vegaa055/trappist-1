@@ -13,11 +13,14 @@ import { buildSystem, advanceTo, julianDayNow } from './system.js';
 import { TrappistScene } from './scene.js';
 import { OrbitControls } from './controls.js';
 import { createUI } from './ui.js';
-import { resonanceState } from './resonance.js';
+import { resonanceState, ConjunctionTracker } from './resonance.js';
 import { PLANETS, STAR } from './data.js';
 import { Photometer } from './observe.js';
 import { TransitDetector } from './transits.js';
 import { createObservatory } from './observatory.js';
+import { SurfaceView } from './surface.js';
+import { TransitChimes } from './sound.js';
+import { createTour } from './tour.js';
 
 const canvas = document.getElementById('view');
 const boot = document.getElementById('boot');
@@ -52,6 +55,8 @@ const settings = {
   earthView: false,
   showObservatory: false,
   lcBand: 'vis',
+  surfaceView: false,
+  resonanceView: false,
 
   showOrbits: true,
   showTrails: false,
@@ -128,22 +133,96 @@ composer.addPass(new OutputPass());
 // integrator step. The boot integration from 2015 feeds the detector too, so
 // the TTV plot opens with the full history.
 const photometer = new Photometer({ band: settings.lcBand });
+const chimes = new TransitChimes();
 const markers = [];
 let detector;
+let laplace;
+let busy = false;
+
+// Laplace angles once per simulated day, from the 2015 epoch on.
+function recordLaplace(nb) {
+  if (nb.time - laplace.last < 1) return;
+  laplace.last = nb.time;
+  laplace.t.push(nb.time);
+  resonanceState(nb).laplace.forEach((l, k) => laplace.phi[k].push(l.phi));
+  if (laplace.t.length > 30000) {
+    laplace.t.splice(0, 5000);
+    for (const s of laplace.phi) s.splice(0, 5000);
+  }
+}
+
 function resetObservations() {
   detector = new TransitDetector();
   detector.listeners.push((id, t) => {
     markers.push({ id, t });
     if (markers.length > 400) markers.splice(0, markers.length - 400);
+    if (!busy) chimes.play(id);
   });
   markers.length = 0;
   photometer.clear();
+  laplace = { t: [], phi: [[], [], [], [], []], last: -Infinity };
 }
 let observatory = null;
 resetObservations();
 
-const onStepLive = (nb) => { detector.sample(nb); photometer.sample(nb, world.activity); };
-const onStepBoot = (nb) => detector.sample(nb);
+const conjunctions = new ConjunctionTracker((k, x, y, t) => world.addConjunction(k, x, y, t));
+const onStepLive = (nb) => {
+  detector.sample(nb);
+  photometer.sample(nb, world.activity);
+  recordLaplace(nb);
+  conjunctions.sample(nb);
+};
+const onStepBoot = (nb) => { detector.sample(nb); recordLaplace(nb); };
+
+// ---------------------------------------------------------- on the ground --
+const surface = new SurfaceView({ camera, canvas, world });
+let surfaceSavedScale = null;
+
+function setSurface(id, theta) {
+  if (!id) {
+    if (!settings.surfaceView) return;
+    settings.surfaceView = false;
+    surface.exit();
+    world.surfaceInfo = null;
+    if (surfaceSavedScale) ui.setScale(...surfaceSavedScale);
+    controls.enabled = true;
+    camera.near = 0.0005;
+    camera.fov = 50;
+    camera.up.set(0, 1, 0);
+    camera.updateProjectionMatrix();
+    document.getElementById('surface-hud').hidden = true;
+    document.getElementById('btn-surface').classList.remove('btn--primary');
+    if (settings.selected) focusBody(settings.selected);
+    return;
+  }
+  if (settings.earthView) setEarthView(false);
+  if (settings.resonanceView) setResonanceView(false);
+  if (!settings.surfaceView) surfaceSavedScale = [settings.planetScale, settings.starScale];
+  ui.setScale(1, 1);
+  controls.enabled = false;
+  settings.following = null;
+  if (theta !== undefined) { surface.theta = theta; ui.setTheta(theta); }
+  surface.enter(id);
+  settings.surfaceView = true;
+  document.getElementById('surface-hud').hidden = false;
+  document.getElementById('btn-surface').classList.add('btn--primary');
+}
+
+// ----------------------------------------------------------- resonance view --
+// Top-down, with a fading spoke at every conjunction of neighbouring planets.
+function setResonanceView(on) {
+  settings.resonanceView = on;
+  if (on) {
+    world.clearConjunctions();
+    settings.selected = null;
+    ui.setSelected(null);
+    settings.following = null;
+    controls.target.copy(world.starWorld);
+    controls.spherical.set(Math.max(controls.spherical.radius, 130), 0.12, controls.spherical.theta);
+    controls.minDistance = 0.002;
+  }
+  document.getElementById('btn-corotate').classList.toggle('btn--primary', on);
+}
 
 // ------------------------------------------------------------ Earth view --
 // A telescope looking back along our real line of sight (scene +z), far away
@@ -159,6 +238,8 @@ function setEarthView(on) {
   document.getElementById('earth-hud').hidden = !on;
   document.getElementById('btn-earth').classList.toggle('btn--primary', on);
   if (on) {
+    if (settings.surfaceView) setSurface(null);
+    if (settings.resonanceView) setResonanceView(false);
     savedScale = [settings.planetScale, settings.starScale];
     ui.setScale(1, 1);
     settings.following = null;
@@ -200,8 +281,6 @@ function release() {
 
 // ---------------------------------------------------------------------- UI --
 
-let busy = false;
-
 const ui = createUI({
   settings,
   callbacks: {
@@ -224,6 +303,14 @@ const ui = createUI({
       ui.renderInfo(world.describe(id));
     },
     onEarthView: () => setEarthView(!settings.earthView),
+    onSurface: () => (settings.surfaceView ? setSurface(null) : setSurface(settings.selected && settings.selected !== STAR.id ? settings.selected : 'e')),
+    onTheta: (v) => { surface.theta = v; },
+    onCorotate: () => setResonanceView(!settings.resonanceView),
+    onChimes: () => {
+      chimes.setEnabled(!chimes.enabled);
+      document.getElementById('btn-chimes').classList.toggle('btn--primary', chimes.enabled);
+    },
+    onTour: () => tour.start(),
     onObservatory: () => { settings.showObservatory = !settings.showObservatory; },
     onSuperflare: () => {
       world.activity.trigger(3e33);
@@ -269,6 +356,7 @@ async function jumpTo(jd) {
 // ------------------------------------------------------------------- input --
 
 canvas.addEventListener('pointerup', (e) => {
+  if (settings.surfaceView || settings.earthView) return;
   if (controls.clickWasDrag || e.button !== 0) return;
   const id = world.pickAt(e.clientX, e.clientY);
   if (id) focusBody(id);
@@ -292,6 +380,7 @@ window.addEventListener('keydown', (e) => {
       break;
     case 'h': document.body.classList.toggle('ui-hidden'); break;
     case 'escape':
+      if (settings.surfaceView) { setSurface(null); break; }
       settings.selected = null;
       ui.setSelected(null);
       release();
@@ -307,6 +396,12 @@ window.addEventListener('keydown', (e) => {
     case 'i': settings.thermalView = !settings.thermalView; ui.syncToggles(); break;
     case 'e': setEarthView(!settings.earthView); break;
     case 'j': settings.showObservatory = !settings.showObservatory; break;
+    case 'g': if (tour.active) tour.close(); else tour.start(); break;
+    case 'u': ui.callbacks.onSurface(); break;
+    case 'r': ui.callbacks.onCorotate(); break;
+    case 'm': ui.callbacks.onChimes(); break;
+    case 'arrowright': if (tour.active) tour.next(); break;
+    case 'arrowleft': if (tour.active) tour.prev(); break;
     default: break;
   }
 });
@@ -331,6 +426,7 @@ let lastSteps = 0;
 let infoTimer = 0;
 let resTimer = 0;
 let flareTimer = 0;
+let surfaceTimer = 0;
 
 function animate() {
   requestAnimationFrame(animate);
@@ -356,7 +452,13 @@ function animate() {
       controls.target.copy(focusState.to);
     }
   }
-  if (settings.earthView) {
+  // Bodies that cameras ride on must be current before the camera moves.
+  world.syncPositions();
+
+  if (settings.surfaceView) {
+    surface.update();
+    world.surfaceInfo = { id: surface.id, up: surface.upVector(new THREE.Vector3()) };
+  } else if (settings.earthView) {
     camera.fov = earthFov;
     camera.position.copy(world.starWorld).add(new THREE.Vector3(0, 0, EARTH_DISTANCE));
     camera.up.set(0, 1, 0);
@@ -394,6 +496,11 @@ function animate() {
   if (resTimer <= 0) {
     resTimer = 0.25;
     ui.renderResonance(resonanceState(sim.nbody));
+  }
+
+  if (settings.surfaceView) {
+    surfaceTimer -= dtWall;
+    if (surfaceTimer <= 0) { surfaceTimer = 0.2; ui.renderSurface(surface.describe()); }
   }
 
   infoTimer -= dtWall;
@@ -443,12 +550,50 @@ observatory = createObservatory({
   settings,
   photometer,
   getDetector: () => detector,
+  getLaplace: () => laplace,
   markers,
   epochJD: sim.epochJD,
   onBand: (id) => { settings.lcBand = id; photometer.setBand(id); observatory.setBand(id); },
 });
 
+// ------------------------------------------------------------------ tour --
+const tour = createTour({
+  api: {
+    reset() {
+      settings.selected = null;
+      ui.setSelected(null);
+      release();
+      setSurface(null);
+      setEarthView(false);
+      setResonanceView(false);
+      settings.thermalView = false;
+      settings.showTrails = false;
+      settings.showObservatory = false;
+      settings.paused = false;
+      ui.setPaused(false);
+      ui.syncToggles();
+    },
+    overview() {
+      settings.selected = null;
+      ui.setSelected(null);
+      release();
+      controls.target.copy(world.starWorld);
+      controls.spherical.set(135, Math.PI / 2 - 0.62, 0.55);
+    },
+    focus: (id) => focusBody(id),
+    viewDayside: (id, offset) => viewDayside(id, offset),
+    setSpeed: (dps) => ui.setSpeed(dps),
+    setThermal: (on) => { settings.thermalView = on; ui.syncToggles(); },
+    setEarthView,
+    setSurface,
+    setResonanceView,
+    setScenario: (id, sc) => world.setScenario(id, sc),
+    openObservatory: (tab) => { settings.showObservatory = true; observatory.selectTab(tab); },
+    superflare: () => world.activity.trigger(3e33),
+  },
+});
+
 window.trappist = {
-  sim, world, settings, camera, controls, renderer, composer, bloom, viewDayside, photometer,
+  sim, world, settings, camera, controls, renderer, composer, bloom, viewDayside, photometer, surface, tour,
   get detector() { return detector; },
 };

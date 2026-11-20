@@ -365,18 +365,55 @@ subtracted; spots crossed by a transiting planet are not modelled.
   link; plus a **discovery timeline** (2015 TRAPPIST → 2017 Spitzer → 2018
   Hubble → 2021 Agol → 2023 MIRI b/c → 2025 d, e → 2026 b/c phase curves and f).
 
-### Phase 5 — Experience
+### Phase 5 — Experience ✅ done (20 Nov 2026)
 *Goal: things you can only see by being there.*
 
-- **Stand on a planet:** camera on the surface at a chosen longitude — the
-  star fixed in the sky (it is 5.5° across from b, ~10× the Sun from Earth) and
-  neighbouring planets as discs larger than our Moon during close approaches.
-- **The Sun in their sky:** a ~5th-magnitude star placed at the real
-  anti-Earth direction.
-- **Resonance view:** a co-rotating frame and a Laplace-angle diagram that
-  shows the chain librating.
-- Guided tour with narration cards.
-- Optional: resonance sonification — each transit a note.
+**What was built**
+- **Stand on a planet** (`U`, `src/surface.js`): a camera a few km above the
+  true-size globe, placed by angle from the substellar point (0° star
+  overhead, 90° terminator, 180° permanent night). Drag to look, scroll to
+  zoom like binoculars. A live readout gives the star's size and height and the
+  three largest planets in the sky: size, distance, phase, height. Scenarios
+  with air get a sky dome (brighter toward the horizon, twilight tint near the
+  terminator) that drowns the stars by day. The panel slider sets where to
+  stand.
+- **The Sun in their sky**: a V ≈ 5.3 star placed along our line of sight —
+  i.e. *toward* Earth, not away from it (an earlier draft of this plan had that
+  backwards) — labelled from the surface. Seen from TRAPPIST-1 it lies in Leo,
+  opposite TRAPPIST-1's position in our sky in Aquarius.
+- **Resonance view** (`R`): a fading spoke at every conjunction of neighbouring
+  planets. The co-rotating frame in the original plan was dropped: with
+  e < 0.01 every orbit traces a plain circle in it. Conjunctions show the chain
+  directly.
+- **Resonances tab** in the observatory: the five Laplace angles sampled daily
+  from 2015, staying in narrow bands.
+- **Guided tour** (`G`, `src/tour.js`): ten stops from the overview through
+  the star, b, c, e, the outer worlds, the resonance, the Earth view and the
+  surface of e, to what comes next. Each stop starts from a clean state.
+- **Transit sounds** (`M`, `src/sound.js`): each transit rings a note at
+  880 Hz × P_b/P, so neighbours sound near a minor sixth, a major sixth, fifths
+  and a fourth.
+- `tools/serve.py`: a no-cache dev server. Plain `http.server` let the browser
+  keep running a stale ES module after it changed on disk.
+
+**A finding: the shared pattern speed.** My first version drew spokes in the
+inertial frame, expecting them to stay put. They smeared all the way round. No
+pair sits exactly on its commensurability: b–c conjunctions advance 237°, not
+240°. Measuring the drift for every pair over 1,500 days:
+
+| Pair | Near | Conjunctions | Drift | Period | Scatter |
+| --- | --- | --- | --- | --- | --- |
+| b–c | 8:5 | 373 | 0.719°/d | 501 d | 1.0° |
+| c–d | 5:3 | 249 | 0.734°/d | 491 d | 2.3° |
+| d–e | 3:2 | 124 | 0.729°/d | 494 d | 1.8° |
+| e–f | 3:2 | 83 | 0.734°/d | 491 d | 1.7° |
+| f–g | 4:3 | 41 | 0.743°/d | 484 d | 1.8° |
+| g–h | 3:2 | 42 | 0.739°/d | 487 d | 0.7° |
+
+All six drift together, once per ~491 days. That is Agol's TTV super-period
+(491 ± 5 d, 485–500 across pairs), here showing up as geometry. The spokes now
+turn at that rate, and every pair's conjunctions stack onto exactly p − q
+spokes: three for b–c, two for c–d, one each for the rest.
 
 ### Phase 6 — Polish & ship
 - Performance pass (mobile quality tier), accessibility of the panel.

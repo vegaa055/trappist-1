@@ -148,6 +148,25 @@ export function createUI({ settings, callbacks }) {
     (v) => { settings.flareRate = v / 100; }, (v) => (v === 100 ? 'observed (K2)' : `${(v / 100).toFixed(1)}× observed`));
   $('btn-superflare').addEventListener('click', () => callbacks.onSuperflare?.());
   $('btn-earth').addEventListener('click', () => callbacks.onEarthView?.());
+  $('btn-tour').addEventListener('click', () => callbacks.onTour?.());
+  $('btn-surface').addEventListener('click', () => callbacks.onSurface?.());
+  $('btn-corotate').addEventListener('click', () => callbacks.onCorotate?.());
+  $('btn-chimes').addEventListener('click', () => callbacks.onChimes?.());
+  const thetaSlider = slider('in-theta', 'val-theta',
+    (v) => callbacks.onTheta?.(v),
+    (v) => (v < 3 ? 'star overhead' : v > 177 ? 'antistellar point' : Math.abs(v - 90) < 3 ? 'terminator' : `${v}° from substellar`));
+  function setTheta(v) { thetaSlider.input.value = String(v); thetaSlider.run(); }
+
+  function renderSurface(d) {
+    $('surface-title').innerHTML = `Standing on <b>${d.planet.name}</b> · ${d.theta.toFixed(0)}° from the substellar point`;
+    const rows = [
+      ['star', `${d.starDeg.toFixed(2)}° across (${(d.starDeg / 0.53).toFixed(1)}× the Sun from Earth) · ${d.starElev >= 0 ? `${d.starElev.toFixed(0)}° up` : 'below horizon'}`],
+    ];
+    for (const p of d.sky.slice(0, 3)) {
+      rows.push([`${p.id}`, `${p.sizeDeg < 0.1 ? `${(p.sizeDeg * 60).toFixed(1)}′` : `${p.sizeDeg.toFixed(2)}°`} (${p.moons.toFixed(2)}× Moon) · ${Math.round(p.km).toLocaleString()} km · ${Math.round(p.phase * 100)}% lit · ${p.elev >= 0 ? `${p.elev.toFixed(0)}° up` : 'below horizon'}`]);
+    }
+    $('surface-stats').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  }
   $('btn-observatory').addEventListener('click', () => callbacks.onObservatory?.());
 
   slider('in-exposure', 'val-exposure',
@@ -366,6 +385,7 @@ export function createUI({ settings, callbacks }) {
 
   return {
     setPaused, setSelected, renderInfo, renderResonance, renderActivity, setSpeed, setScale,
+    setTheta, renderSurface, callbacks,
     updateClock, updateDiagnostics, syncToggles,
   };
 }

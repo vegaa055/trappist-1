@@ -40,12 +40,22 @@ observatory, which has three tabs:
 - transit-timing variations from 2015 to now;
 - a timeline of what has been learned.
 
+## Exploring it
+
+- `G` runs a ten-stop guided tour.
+- `U` puts you on the surface of the selected planet. The star hangs fixed in
+  the sky, and neighbouring planets pass as discs up to the size of our Moon.
+- `R` marks every conjunction of neighbouring planets. Because of the
+  resonances they stack onto a few spokes that turn together once every ~491
+  days.
+- `M` plays a note at every transit, pitched to the planet's orbital frequency.
+
 ## Running it
 
 ES modules need a server:
 
 ```bash
-python -m http.server 8124
+python tools/serve.py 8124
 ```
 
 then open <http://localhost:8124>. On load, the page integrates the system from
@@ -71,6 +81,10 @@ TTVs and Laplace angles against Agol et al. 2021. The results are in
 | `O` / `T` / `L` / `Z` | orbits / trails / labels / habitable zone |
 | `I` | thermal 15 µm view |
 | `E` | view from Earth (scroll to zoom) |
-| `J` | observatory: light curve, TTVs, timeline |
+| `J` | observatory: light curve, TTVs, resonances, timeline |
+| `G` | guided tour (`←`/`→` to step) |
+| `U` | stand on the selected planet (drag to look, scroll to zoom) |
+| `R` | resonance view |
+| `M` | transit sounds |
 | `H` | hide the interface |
 | `Esc` | deselect and free the camera |

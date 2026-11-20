@@ -612,3 +612,31 @@ body.ui-hidden .legend { display: none; }
 .earth-hud b { color: #9fc0ff; }
 .btn kbd { margin-left: 4px; font-size: 9.5px; opacity: 0.6; }
 body.ui-hidden .observatory, body.ui-hidden .earth-hud { display: none; }
+
+/* ------------------------------------------------------------- Phase 5 -- */
+.tour {
+  position: absolute; top: 70px; left: 50%; transform: translateX(-50%); z-index: 8;
+  width: min(440px, calc(100vw - 32px)); padding: 12px 16px 10px;
+  background: var(--glass-hi); border: 1px solid rgba(255, 138, 76, 0.4); border-radius: var(--radius);
+  backdrop-filter: blur(14px); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+.tour[hidden] { display: none; }
+.tour__head { display: flex; justify-content: space-between; align-items: center; }
+.tour__step { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); letter-spacing: 0.08em; }
+.tour__title { margin: 4px 0 6px; font-size: 16px; font-weight: 600; color: var(--amber-soft); letter-spacing: 0.02em; }
+.tour__text { margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: var(--ink-dim); }
+.tour .row { justify-content: flex-end; margin-bottom: 0; }
+.btn:disabled { opacity: 0.35; cursor: default; }
+
+.surface-hud {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 6;
+  width: min(460px, calc(100vw - 32px)); padding: 8px 12px;
+  background: var(--glass); border: 1px solid rgba(111, 211, 160, 0.35); border-radius: var(--radius);
+  backdrop-filter: blur(10px);
+}
+.surface-hud[hidden] { display: none; }
+.surface-hud__title { font-size: 12px; color: var(--ink-dim); margin-bottom: 4px; }
+.surface-hud__title b { color: #8fe3b8; }
+.surface-hud .diag dd { text-align: right; }
+.surface-hud__hint { margin-top: 4px; font-size: 10px; color: var(--ink-faint); }
+body.ui-hidden .tour, body.ui-hidden .surface-hud { display: none; }

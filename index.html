@@ -54,6 +54,23 @@
       </section>
 
       <section class="group">
+        <h2>Explore</h2>
+        <div class="row row--buttons">
+          <button id="btn-tour" class="btn btn--primary" type="button">Guided tour <kbd>G</kbd></button>
+          <button id="btn-surface" class="btn" type="button">Stand on planet <kbd>U</kbd></button>
+          <button id="btn-corotate" class="btn" type="button">Resonance view <kbd>R</kbd></button>
+          <button id="btn-chimes" class="btn" type="button">Transit sounds <kbd>M</kbd></button>
+        </div>
+        <label class="field">
+          <span class="field__label">Where to stand <em id="val-theta"></em></span>
+          <input id="in-theta" type="range" min="0" max="180" value="35" />
+        </label>
+        <p class="note">Standing uses the selected planet (e if none). The resonance view marks every conjunction of
+          neighbouring planets: near p:q they recur at only p − q places, which all turn together once per ~491 days. Sounds: each transit plays a note pitched to
+          the planet's orbital frequency.</p>
+      </section>
+
+      <section class="group">
         <h2>Observe</h2>
         <p class="note">See the system the way JWST does: edge-on from 40 light-years, every planet crossing a
           spotted, flaring star.</p>
@@ -184,6 +201,7 @@
         <div class="tabs" role="tablist">
           <button class="tab is-active" type="button" data-tab="lc">Light curve</button>
           <button class="tab" type="button" data-tab="ttv">Transit timing</button>
+          <button class="tab" type="button" data-tab="laplace">Resonances</button>
           <button class="tab" type="button" data-tab="timeline">Timeline</button>
         </div>
         <div class="observatory__tools" id="lc-tools">
@@ -203,8 +221,33 @@
           2015 epoch to now. The planets tug each other early and late on a ~490-day cycle — this is how their masses were
           measured. Click a legend entry to hide a planet.</p>
       </div>
+      <div class="observatory__pane" data-pane="laplace" hidden>
+        <canvas class="observatory__canvas" id="lap-canvas"></canvas>
+        <p class="observatory__note">The five Laplace angles φ = pλ₁ − (p+q)λ₂ + qλ₃, sampled daily since 2015. Circulating
+          angles would sweep through all 360°; these stay in narrow bands, which is what being locked in resonance
+          means.</p>
+      </div>
       <ol class="timeline observatory__pane" data-pane="timeline" id="timeline" hidden></ol>
     </section>
+
+    <section class="tour" id="tour" hidden>
+      <header class="tour__head">
+        <span class="tour__step" id="tour-step"></span>
+        <button class="info__close" id="tour-close" type="button" aria-label="Close tour">×</button>
+      </header>
+      <h2 class="tour__title" id="tour-title"></h2>
+      <p class="tour__text" id="tour-text"></p>
+      <div class="row row--buttons">
+        <button class="btn" id="tour-prev" type="button">Back</button>
+        <button class="btn btn--primary" id="tour-next" type="button">Next</button>
+      </div>
+    </section>
+
+    <div class="surface-hud" id="surface-hud" hidden>
+      <div class="surface-hud__title" id="surface-title"></div>
+      <dl class="diag" id="surface-stats"></dl>
+      <div class="surface-hud__hint"><kbd>drag</kbd> look · <kbd>scroll</kbd> zoom · <kbd>U</kbd> leave</div>
+    </div>
 
     <div class="earth-hud" id="earth-hud" hidden>
       <b>View from Earth</b> · line of sight 40.7 ly · true sizes · <kbd>scroll</kbd> zoom · <kbd>E</kbd> exit
@@ -226,6 +269,8 @@
       <span><kbd>I</kbd> thermal</span>
       <span><kbd>E</kbd> Earth view</span>
       <span><kbd>J</kbd> observatory</span>
+      <span><kbd>G</kbd> tour</span>
+      <span><kbd>U</kbd> stand</span>
       <span><kbd>H</kbd> hide UI</span>
     </footer>
 

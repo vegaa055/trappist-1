@@ -176,3 +176,53 @@ export function drawTTV(canvas, detector, { epochJD, hidden = new Set() }) {
   }
   ctx.fillStyle = INK;
 }
+
+const TRIPLET_COLORS = ['#ff9a6a', '#ffd166', '#6fd3a0', '#5ec5e8', '#a98bff'];
+
+/**
+ * Laplace angles over time. In a resonant chain they librate — swing back and
+ * forth within a band — instead of circulating through all 360°.
+ */
+export function drawLaplace(canvas, history, { epochJD, labels }) {
+  const { ctx, w, h } = setup(canvas);
+  const pad = { l: 46, r: 10, t: 16, b: 20 };
+  const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+  const n = history.t.length;
+  if (n < 2) {
+    ctx.fillStyle = DIM;
+    ctx.fillText('collecting…', pad.l + 8, pad.t + 16);
+    return;
+  }
+  const t0 = history.t[0], t1 = history.t[n - 1];
+  const X = (t) => pad.l + ((t - t0) / Math.max(t1 - t0, 1)) * pw;
+  const Y = (deg) => pad.t + ((180 - deg) / 360) * ph;
+
+  ctx.strokeStyle = GRID;
+  ctx.fillStyle = DIM;
+  for (const d of [-180, -90, 0, 90, 180]) {
+    ctx.beginPath(); ctx.moveTo(pad.l, Y(d)); ctx.lineTo(w - pad.r, Y(d)); ctx.stroke();
+    ctx.fillText(`${d}°`, 8, Y(d) + 3);
+  }
+  const year = (t) => 2000 + (t + epochJD - 2451544.5) / 365.25;
+  const y0 = year(t0), y1 = year(t1);
+  const ystep = niceStep(Math.max(y1 - y0, 0.5), 6);
+  for (let y = Math.ceil(y0 / ystep) * ystep; y <= y1; y += ystep) {
+    const x = X((y - 2000) * 365.25 + 2451544.5 - epochJD);
+    ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + ph); ctx.stroke();
+    const label = ystep < 1 ? y.toFixed(1) : String(Math.round(y));
+    ctx.fillText(label, x - ctx.measureText(label).width / 2, h - 6);
+  }
+
+  const step = Math.max(1, Math.floor(n / (pw * 2)));
+  history.phi.forEach((series, k) => {
+    ctx.fillStyle = TRIPLET_COLORS[k];
+    for (let i = 0; i < n; i += step) ctx.fillRect(X(history.t[i]) - 0.75, Y(series[i]) - 0.75, 1.5, 1.5);
+  });
+
+  let lx = pad.l + 4;
+  labels.forEach((label, k) => {
+    ctx.fillStyle = TRIPLET_COLORS[k];
+    ctx.fillText(`● φ ${label}`, lx, 11);
+    lx += 62;
+  });
+}
