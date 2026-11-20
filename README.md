@@ -1,5 +1,7 @@
 # TRAPPIST-1
 
+**Live: <https://trappist-1-sim.vercel.app/>**
+
 An interactive 3D model of the TRAPPIST-1 system in the browser. Seven
 Earth-sized planets move under direct N-body gravity, seeded from their
 measured masses and orbits. Each one is drawn the way JWST's results allow,

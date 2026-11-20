@@ -25,7 +25,7 @@ each time.
 
 ## Before sharing
 
-`index.html` references the card by absolute URL, and the placeholder
-`https://SITE_URL/` appears in four places (canonical, `og:url`, `og:image`,
-`twitter:image`). Replace it with the deployed address. Then check with
+`index.html` references the card by absolute URL at
+<https://trappist-1-sim.vercel.app/>, in four places (canonical, `og:url`,
+`og:image`, `twitter:image`). Update all four if the domain changes. Check with
 <https://www.opengraph.xyz> — platforms cache previews aggressively.
