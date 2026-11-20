@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>TRAPPIST-1 — seven worlds under real N-body gravity</title>
+  <meta name="description"
+    content="An interactive 3D model of the TRAPPIST-1 system: seven Earth-sized planets integrated from Agol et al. 2021, with what JWST has found about each one." />
+  <meta name="theme-color" content="#07040a" />
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='6' fill='%23ff7a3a'/><circle cx='16' cy='16' r='10' fill='none' stroke='%236fd3a0' stroke-width='1'/><circle cx='16' cy='16' r='14' fill='none' stroke='%238b9cff' stroke-width='1'/></svg>" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <div id="app">
+    <canvas id="view"></canvas>
+    <div id="labels" class="label-layer"></div>
+
+    <header class="masthead">
+      <h1>TRAPPIST-1</h1>
+      <p class="masthead__sub">Seven rocky worlds · direct N-body from Agol et al. 2021 · JWST findings</p>
+      <div class="clock">
+        <span id="date-readout" class="clock__date">—</span>
+        <span id="speed-readout" class="clock__speed">—</span>
+      </div>
+    </header>
+
+    <nav class="bodies" id="body-list" aria-label="Focus a body"></nav>
+
+    <aside class="panel" id="panel">
+      <button class="panel__toggle" id="panel-toggle" type="button" aria-label="Collapse panel">×</button>
+
+      <section class="group">
+        <h2>Time</h2>
+        <div class="row row--buttons">
+          <button id="btn-play" class="btn btn--primary" type="button">Pause</button>
+          <button id="btn-now" class="btn" type="button">Today</button>
+          <button id="btn-epoch" class="btn" type="button" title="Agol et al. 2021 reference epoch">2015 epoch</button>
+        </div>
+        <label class="field">
+          <span class="field__label">Rate <em id="val-speed"></em></span>
+          <input id="in-speed" type="range" min="0" max="1000" value="700" />
+        </label>
+        <div class="row row--chips">
+          <button class="chip" data-speed="0.0000116">real time</button>
+          <button class="chip" data-speed="0.0417">1 h/s</button>
+          <button class="chip" data-speed="0.25">6 h/s</button>
+          <button class="chip" data-speed="1">1 d/s</button>
+          <button class="chip" data-speed="7">1 wk/s</button>
+          <button class="chip" data-speed="30">1 mo/s</button>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Scale</h2>
+        <p class="note">The star is drawn at its true size. Planets are enlarged so they stay visible; orbits and
+          physics are always true to scale.</p>
+        <label class="field">
+          <span class="field__label">Planet size <em id="val-planet"></em></span>
+          <input id="in-planet" type="range" min="1" max="40" value="4" />
+        </label>
+        <label class="field">
+          <span class="field__label">Star size <em id="val-star"></em></span>
+          <input id="in-star" type="range" min="1" max="8" value="1" />
+        </label>
+        <div class="row row--chips">
+          <button class="chip" id="btn-true-scale">true scale</button>
+          <button class="chip" id="btn-default-scale">default</button>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>The star</h2>
+        <label class="field">
+          <span class="field__label">Activity <em id="val-activity"></em></span>
+          <input id="in-activity" type="range" min="0" max="300" value="100" />
+        </label>
+        <label class="field">
+          <span class="field__label">Starspots <em id="val-spots"></em></span>
+          <input id="in-spots" type="range" min="0" max="200" value="100" />
+        </label>
+        <label class="field">
+          <span class="field__label">Flares <em id="val-flares"></em></span>
+          <input id="in-flares" type="range" min="0" max="300" value="100" />
+        </label>
+      </section>
+
+      <section class="group">
+        <h2>Resonant chain</h2>
+        <p class="note">Osculating period ratios against the nominal commensurabilities, and the five three-body
+          Laplace angles φ = pλ₁ − (p+q)λ₂ + qλ₃. They oscillate on the ~490-day TTV cycle.</p>
+        <dl class="diag" id="res-ratios"></dl>
+        <dl class="diag diag--laplace" id="res-laplace"></dl>
+      </section>
+
+      <section class="group">
+        <h2>Rendering</h2>
+        <label class="field">
+          <span class="field__label">Exposure <em id="val-exposure"></em></span>
+          <input id="in-exposure" type="range" min="20" max="300" value="100" />
+        </label>
+        <label class="field">
+          <span class="field__label">Bloom <em id="val-bloom"></em></span>
+          <input id="in-bloom" type="range" min="0" max="200" value="80" />
+        </label>
+        <label class="field">
+          <span class="field__label">Milky Way <em id="val-mw"></em></span>
+          <input id="in-mw" type="range" min="0" max="250" value="100" />
+        </label>
+      </section>
+
+      <section class="group">
+        <h2>Show</h2>
+        <div class="toggles" id="toggles"></div>
+      </section>
+
+      <section class="group group--diag">
+        <h2>Diagnostics</h2>
+        <dl class="diag">
+          <div><dt>fps</dt><dd id="diag-fps">—</dd></div>
+          <div><dt>integrator steps / frame</dt><dd id="diag-steps">—</dd></div>
+          <div><dt>elapsed</dt><dd id="diag-elapsed">—</dd></div>
+          <div><dt>energy drift</dt><dd id="diag-energy">—</dd></div>
+        </dl>
+        <p class="note">4th-order Yoshida symplectic integrator, Δt = 0.004 d. Seeded with Agol et al. 2021's
+          Jacobi elements and checked against their published transit times.</p>
+      </section>
+    </aside>
+
+    <button class="panel__open" id="panel-open" type="button" aria-label="Open panel">☰</button>
+
+    <section class="info" id="info" hidden>
+      <header class="info__head">
+        <h2 id="info-name">—</h2>
+        <button class="info__close" id="info-close" type="button" aria-label="Close">×</button>
+      </header>
+      <p class="info__badge" id="info-badge"></p>
+      <dl class="info__stats" id="info-stats"></dl>
+      <p class="info__findings" id="info-findings"></p>
+      <p class="info__sources" id="info-sources"></p>
+      <div class="row row--buttons">
+        <button class="btn btn--primary" id="btn-follow" type="button">Follow</button>
+        <button class="btn" id="btn-release" type="button">Free camera</button>
+      </div>
+    </section>
+
+    <footer class="help" id="help">
+      <span><kbd>drag</kbd> orbit</span>
+      <span><kbd>scroll</kbd> zoom</span>
+      <span><kbd>right-drag</kbd> pan</span>
+      <span><kbd>click</kbd> select</span>
+      <span><kbd>space</kbd> pause</span>
+      <span><kbd>1–7</kbd> planets</span>
+      <span><kbd>H</kbd> hide UI</span>
+    </footer>
+
+    <div class="boot" id="boot">
+      <div class="boot__inner">
+        <div class="boot__spinner"></div>
+        <p id="boot-text">compiling shaders…</p>
+        <div class="boot__bar"><div class="boot__fill" id="boot-fill"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js",
+    "three/addons/": "./vendor/jsm/"
+  }
+}
+</script>
+  <script type="module" src="./src/main.js"></script>
+</body>
+
+</html>
