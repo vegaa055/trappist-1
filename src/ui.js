@@ -10,6 +10,7 @@ const TOGGLES = [
   { key: 'showHabitableZone', label: 'Habitable zone' },
   { key: 'showLineOfSight', label: 'Line of sight' },
   { key: 'showGlow', label: 'Glow' },
+  { key: 'flareLighting', label: 'Flare light' },
   { key: 'showStars', label: 'Stars' },
   { key: 'showBump', label: 'Relief' },
   { key: 'highDetail', label: 'High detail' },
@@ -134,12 +135,13 @@ export function createUI({ settings, callbacks }) {
   const starSlider = slider('in-star', 'val-star',
     (v) => { settings.starScale = v; }, (v) => `${fmtInt(v)}×`);
 
-  slider('in-activity', 'val-activity',
-    (v) => { settings.stellarActivity = v / 100; }, (v) => `${fmtInt(v)}%`);
   slider('in-spots', 'val-spots',
-    (v) => { settings.starspots = v / 100; }, (v) => `${fmtInt(v)}%`);
-  slider('in-flares', 'val-flares',
-    (v) => { settings.flares = v / 100; }, (v) => `${fmtInt(v)}%`);
+    (v) => { settings.spotCoverage = v / 1000; }, (v) => `${(v / 10).toFixed(1)}% of surface`);
+  slider('in-faculae', 'val-faculae',
+    (v) => { settings.faculae = v / 100; }, (v) => `${fmtInt(v)}%`);
+  slider('in-flare-rate', 'val-flare-rate',
+    (v) => { settings.flareRate = v / 100; }, (v) => (v === 100 ? 'observed (K2)' : `${(v / 100).toFixed(1)}× observed`));
+  $('btn-superflare').addEventListener('click', () => callbacks.onSuperflare?.());
 
   slider('in-exposure', 'val-exposure',
     (v) => { settings.exposure = v / 100; }, (v) => (v / 100).toFixed(2));
@@ -196,10 +198,10 @@ export function createUI({ settings, callbacks }) {
     if (body.kind === 'star') {
       els.infoBadge.textContent = `${STAR.spectralType} · ultracool dwarf`;
       els.infoFindings.textContent =
-        'Fully convective and far more magnetically active than expected. Its flares and starspots '
-        + 'imprint on every transit spectrum, which is why JWST needs many more visits than planned to '
-        + 'separate the star\'s signal from the planets\'.';
-      els.infoSources.textContent = 'Agol+ 2021 (PSJ); NASA/STScI Webb explainer, Jan 2026';
+        'Fully convective and far more magnetically active than expected. Dark spots and bright faculae '
+        + 'imprint on every transit spectrum, and flares hit roughly every JWST visit — which is why '
+        + 'separating the star from the planets takes many more transits than planned.';
+      els.infoSources.textContent = 'Agol+ 2021 (PSJ); Vida+ 2017 (K2 flares); Lim+ 2026 (NIRISS); NASA/STScI, Jan 2026';
     } else {
       els.infoBadge.textContent = `JWST: ${body.findings.status}`;
       els.infoFindings.textContent = body.findings.summary;
@@ -220,6 +222,10 @@ export function createUI({ settings, callbacks }) {
       stats.push(['age', `${b.ageGyr} ± 2.2 Gyr`]);
       stats.push(['distance', `${b.distanceLy} ly`]);
       stats.push(['habitable zone', `${fmt(desc.hz.runawayGreenhouse.au, 4)}–${fmt(desc.hz.maxGreenhouse.au, 4)} AU`]);
+      const a = desc.activity;
+      stats.push(['spot coverage', `${(a.coverage * 100).toFixed(1)} % (${a.spots.length} spots)`]);
+      stats.push(['spot dimming to Earth', `${(a.modulation.deficit * 100).toFixed(2)} %`]);
+      stats.push(['flare output now', a.bolometricBoost > 1e-5 ? `+${(a.bolometricBoost * 100).toFixed(3)} % L★` : 'quiet']);
     } else {
       stats.push(['radius', `${fmt(b.radiusEarth, 3)} R⊕ (${fmtInt(b.radiusKm)} km)`]);
       stats.push(['mass', `${fmt(b.massEarth, 3)} M⊕`]);
@@ -250,6 +256,39 @@ export function createUI({ settings, callbacks }) {
     ).join('');
   }
 
+  const expo = (e) => {
+    const k = Math.floor(Math.log10(e));
+    return `${(e / 10 ** k).toFixed(1)}×10<sup>${k}</sup>`;
+  };
+
+  function renderActivity(act, nowJD) {
+    const rate = act.observedFlareRate();
+    $('act-stats').innerHTML = [
+      ['spot coverage', `${(act.coverage * 100).toFixed(1)} %`],
+      ['dimming toward Earth', `${(act.modulation.deficit * 100).toFixed(2)} %`],
+      ['modulation, last rotation', `${(act.modulation.p2p * 100).toFixed(2)} % p-p <span class="muted">(K2: ~1 %)</span>`],
+      ['flares / day > 10<sup>29</sup> erg', `${fmt(act.flareRate(), 2)} expected · ${isFinite(rate) ? fmt(rate, 2) : '—'} seen`],
+      ['flare light now', act.bolometricBoost > 1e-5
+        ? `+${(act.bolometricBoost * 100).toFixed(3)} % bol · +${(act.channelBoost[2] * 100).toFixed(1)} % blue`
+        : 'quiet'],
+    ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+
+    $('flare-log').innerHTML = act.log.length
+      ? act.log.map((f) => {
+        const jd = nowJD - (act.time - f.simTime);
+        const blue = f.peakFrac * act.blueBoostPerFrac;
+        return `<li class="${f.shown ? '' : 'is-skipped'}"><span class="flare-log__when">${formatDate(jd).slice(0, 18)}</span>`
+          + `<span class="flare-log__e">${expo(f.energy)} erg</span>`
+          + `<span class="flare-log__peak">+${(blue * 100).toFixed(blue < 0.1 ? 1 : 0)} % blue</span></li>`;
+      }).join('')
+      : '<li class="muted">no flares yet — speed time up or trigger one</li>';
+  }
+
+  function setSpeed(daysPerSecond) {
+    speedSlider.input.value = String(speedToSlider(daysPerSecond));
+    speedSlider.run();
+  }
+
   function updateClock(jd, daysPerSecond, paused) {
     els.date.textContent = formatDate(jd);
     els.speed.textContent = paused ? 'paused' : formatSpeed(daysPerSecond);
@@ -263,6 +302,7 @@ export function createUI({ settings, callbacks }) {
   }
 
   return {
-    setPaused, setSelected, renderInfo, renderResonance, updateClock, updateDiagnostics, syncToggles,
+    setPaused, setSelected, renderInfo, renderResonance, renderActivity, setSpeed,
+    updateClock, updateDiagnostics, syncToggles,
   };
 }

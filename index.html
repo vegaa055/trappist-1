@@ -73,18 +73,32 @@
 
       <section class="group">
         <h2>The star</h2>
+        <p class="note">Spots and flares are drawn from TRAPPIST-1's measured statistics. Colours come from Planck's
+          law: cool spots go dark red, 9000 K flares blue-white.</p>
         <label class="field">
-          <span class="field__label">Activity <em id="val-activity"></em></span>
-          <input id="in-activity" type="range" min="0" max="300" value="100" />
+          <span class="field__label">Spot coverage <em id="val-spots"></em></span>
+          <input id="in-spots" type="range" min="0" max="150" value="20" />
         </label>
         <label class="field">
-          <span class="field__label">Starspots <em id="val-spots"></em></span>
-          <input id="in-spots" type="range" min="0" max="200" value="100" />
+          <span class="field__label">Facular network <em id="val-faculae"></em></span>
+          <input id="in-faculae" type="range" min="0" max="200" value="100" />
         </label>
         <label class="field">
-          <span class="field__label">Flares <em id="val-flares"></em></span>
-          <input id="in-flares" type="range" min="0" max="300" value="100" />
+          <span class="field__label">Flare rate <em id="val-flare-rate"></em></span>
+          <input id="in-flare-rate" type="range" min="0" max="1000" value="100" />
         </label>
+        <div class="row row--buttons">
+          <button id="btn-superflare" class="btn" type="button" title="A 3×10³³ erg event — TRAPPIST-1 has one every few months">Trigger superflare</button>
+        </div>
+        <dl class="diag" id="act-stats"></dl>
+      </section>
+
+      <section class="group">
+        <h2>Flare log</h2>
+        <p class="note">Most recent first. Energies follow the K2 flare frequency distribution; the boost is the extra
+          blue light reaching the planets at the peak. At fast time rates flares are stretched to stay visible —
+          their timing and energy are unchanged.</p>
+        <ol class="flare-log" id="flare-log"></ol>
       </section>
 
       <section class="group">

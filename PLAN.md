@@ -209,8 +209,41 @@ Deferred to later phases: the stand-in surfaces and star shader (Phases 2–3).
 - `tools/verify-transits.mjs`: integrate 1,500 d in Node, detect transits, fit
   linear ephemerides, report mean periods vs Agol and TTV amplitudes.
 
-### Phase 2 — The star
+### Phase 2 — The star ✅ done (20 Nov 2026)
 *Goal: an M8 dwarf that looks and behaves like one.*
+
+**What was built**
+- `src/shaders/star.js` builds a temperature map and colours it with Planck's
+  law at R/G/B = 0.61/0.55/0.465 µm relative to 2566 K. Nothing is
+  hand-coloured: 500 K-cooler umbrae come out at ~11 % brightness in red,
+  110 K faculae at ~1.46×, and 9000 K flare kernels blue-white.
+- `src/activity.js` (CPU) holds the measurable parts:
+  - **Spots**: up to 48 discrete spots that are born, grow and decay
+    (12–72 d lives) at the target coverage. The 2 % default gives 1–2 %
+    peak-to-peak rotational modulation toward Earth in the K2 band (observed:
+    ~1 %).
+  - **Flares**: a Poisson process in simulated time drawn from the K2 flare
+    frequency distribution (0.53/d above 1.26×10³⁰ erg, cumulative slope 0.59,
+    extended down to 10²⁹ erg). An 80-day test run gave 49 flares above
+    1.26×10³⁰ erg (K2 observed 42) with a largest of 2×10³³ erg (observed
+    1.2×10³³).
+  - **Flare light on planets**: each flare is a 9000 K blackbody carrying
+    frac·L★, emitted as a Lambertian patch. Planets facing it receive up to 4× the
+    mean, and the far side gets nothing. A 10³¹ erg flare adds ~15 % blue light,
+    and a 3×10³³ erg superflare adds ~15× blue on a planet directly facing it.
+- UI: spot coverage, facular network, flare rate, *Trigger superflare*, live
+  coverage, dimming toward Earth, rotational modulation, observed vs expected
+  flare rate, and a flare log.
+
+**Honest liberties**
+- Flare kernels are drawn ~0.02 rad across, far larger than their physical
+  size. Their surface brightness is scaled down to match, so disc-integrated
+  light is conserved. Ribbons and post-flare arcades are decorative.
+- At fast time rates a flare would last less than a frame, so it is stretched
+  to at least 2.5 s on screen. Its timing and energy are unchanged.
+- Spot and facular temperature contrasts are representative, not measured.
+- The star's spin axis is set along the orbit normal (spin–orbit alignment is
+  consistent with Rossiter–McLaughlin measurements).
 
 - New `star.js` photosphere: 2566 K blackbody colour, deep red-orange limb,
   M-dwarf limb darkening, ~3.3 d rotation.

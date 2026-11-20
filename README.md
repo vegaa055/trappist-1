@@ -11,6 +11,16 @@ under `vendor/`, no build step, procedural GLSL, no image textures.
 See [PLAN.md](PLAN.md) for the science summary, the architecture and the
 phased roadmap.
 
+## The star
+
+TRAPPIST-1 is an M8 dwarf at 2566 K. Its photosphere is rendered from a
+temperature map converted to colour with Planck's law, so cool spots, bright
+faculae and 9000 K flares get their colours from physics rather than a palette.
+Spots and flares are drawn from the star's measured statistics (K2 rotational
+modulation and flare frequency distribution). Each flare's extra light,
+strongest in the blue, reaches only the planets facing it. See
+[PLAN.md](PLAN.md) for the numbers and the liberties taken.
+
 ## Running it
 
 ES modules need a server:

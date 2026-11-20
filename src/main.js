@@ -40,9 +40,10 @@ const settings = {
   bloom: 0.8,
   milkyWay: 1,
 
-  stellarActivity: 1,
-  starspots: 1,
-  flares: 1,
+  spotCoverage: STAR.activity.spotCoverage,
+  faculae: 1,
+  flareRate: 1,
+  flareLighting: true,
 
   showOrbits: true,
   showTrails: false,
@@ -155,6 +156,11 @@ const ui = createUI({
     onEpoch: (which) => jumpTo(which === 'now' ? julianDayNow() : null),
     onToggle: (key) => { if (key === 'showTrails' && settings.showTrails) world.clearTrails(); },
     onBloom: (v) => { bloom.strength = v; },
+    onSuperflare: () => {
+      world.activity.trigger(3e33);
+      if (settings.daysPerSecond > 0.05) ui.setSpeed(0.02);
+      focusBody(STAR.id);
+    },
   },
 });
 ui.setPaused(settings.paused);
@@ -249,15 +255,17 @@ let fpsAccum = 0, fpsFrames = 0;
 let lastSteps = 0;
 let infoTimer = 0;
 let resTimer = 0;
+let flareTimer = 0;
 
 function animate() {
   requestAnimationFrame(animate);
   const dtWall = Math.min(clock.getDelta(), 0.1);
 
+  let simDays = 0;
   if (!settings.paused && !busy) {
-    let days = settings.daysPerSecond * dtWall;
-    if (Math.abs(days) > MAX_DAYS_PER_FRAME) days = Math.sign(days) * MAX_DAYS_PER_FRAME;
-    lastSteps = sim.nbody.advance(days, DT_MAX, MAX_SUBSTEPS);
+    simDays = settings.daysPerSecond * dtWall;
+    if (Math.abs(simDays) > MAX_DAYS_PER_FRAME) simDays = Math.sign(simDays) * MAX_DAYS_PER_FRAME;
+    lastSteps = sim.nbody.advance(simDays, DT_MAX, MAX_SUBSTEPS);
   } else {
     lastSteps = 0;
   }
@@ -275,8 +283,14 @@ function animate() {
   }
   controls.update(dtWall);
 
-  world.update(dtWall, camera);
+  world.update(dtWall, camera, simDays);
   composer.render(dtWall);
+
+  flareTimer -= dtWall;
+  if (flareTimer <= 0) {
+    flareTimer = 0.3;
+    ui.renderActivity(world.activity, sim.epochJD + sim.nbody.time);
+  }
 
   fpsAccum += dtWall; fpsFrames++;
   if (fpsAccum > 0.4) {

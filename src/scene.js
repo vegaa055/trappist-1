@@ -15,7 +15,8 @@ import {
   habitableZone, bareRockDaysideTemp, equilibriumTemp, starAngularDiameter,
 } from './habitable.js';
 import { createPlanetMaterial } from './shaders/planet.js';
-import { createSunMaterial } from './shaders/sun.js';
+import { createStarMaterial, FLARE_KERNEL_RADIUS } from './shaders/star.js';
+import { StellarActivity, MAX_SPOTS, MAX_FLARES } from './activity.js';
 import { createStarfield, createMilkyWay } from './shaders/stars.js';
 import {
   createGlowMaterial, GLOW_EXTENT, createHabitableZone, TRAIL_VERT, TRAIL_FRAG,
@@ -76,7 +77,12 @@ export class TrappistScene {
 
     this.starWorld = new THREE.Vector3();
     this.starDrawRadius = 1;
-    this.stellarClock = 0;
+    this.wallClock = 0;
+    this.activity = new StellarActivity();
+    this.starSpin = 0;
+    this._lightColor = new THREE.Color();
+    this._glowBase = new THREE.Color('#ff6a22');
+    this._glowFlare = new THREE.Color('#cfd8ff');
 
     this._tmpA = new THREE.Vector3();
     this._r = [0, 0, 0];
@@ -94,16 +100,7 @@ export class TrappistScene {
     this.scene.add(view.pivot);
 
     if (body.kind === 'star') {
-      // Phase 1 stand-in: the solar photosphere shader, recoloured to 2566 K
-      // and slowed. Phase 2 replaces it with a purpose-built M-dwarf surface.
-      const mat = createSunMaterial();
-      const u = mat.uniforms;
-      u.uColorDeep.value.setRGB(0.16, 0.012, 0.002);
-      u.uColorMid.value.setRGB(0.95, 0.22, 0.035);
-      u.uColorHot.value.setRGB(1.0, 0.48, 0.16);
-      u.uColorFlare.value.setRGB(0.85, 0.9, 1.0);   // flares are hot: blue-white
-      u.uDisplace.value = 0.4;
-      u.uFlareRate.value = 0.3;
+      const mat = createStarMaterial({ teff: STAR.teff, activity: STAR.activity });
       const mesh = new THREE.Mesh(STAR_SPHERE, mat);
       view.spin.add(mesh);
       view.mesh = mesh;
@@ -218,14 +215,18 @@ export class TrappistScene {
     return radiusAU(body) * UNITS_PER_AU * mult;
   }
 
-  update(dtWall, camera) {
+  update(dtWall, camera, dtSim = 0) {
     const s = this.settings;
     const nb = this.sim.nbody;
     const simDays = nb.time;
 
-    if (!s.paused) {
-      this.stellarClock += dtWall * (0.35 + Math.min(s.daysPerSecond, 5) * 0.12) * s.stellarActivity;
-    }
+    this.wallClock += dtWall;
+
+    // Stellar activity runs on simulated time (flares stretched to stay visible).
+    const act = this.activity;
+    if (act.targetCoverage !== s.spotCoverage) act.setSpotCoverage(s.spotCoverage);
+    act.flareRateScale = s.flareRate;
+    act.update(dtSim, s.paused ? 0 : dtWall);
 
     // 1. Positions and sizes.
     for (const body of this.sim.bodies) {
@@ -243,7 +244,12 @@ export class TrappistScene {
 
     // 2. Rotation. The star turns once per 3.3 d. Planets are tidally locked:
     //    the local +x meridian (the substellar point) always faces the star.
-    starView.spin.rotation.y = (simDays / STAR.rotPeriod) * Math.PI * 2;
+    // The spin axis is taken along the orbit normal: Rossiter–McLaughlin
+    // measurements find the star's spin aligned with the planets' orbits.
+    this.starSpin = (simDays / STAR.rotPeriod) * Math.PI * 2;
+    starView.spin.rotation.y = this.starSpin;
+    // Earth (scene +z) expressed in the star's rotating frame.
+    act.updateModulation([-Math.sin(this.starSpin), 0, Math.cos(this.starSpin)]);
     for (const p of PLANETS) {
       const view = this.views.get(p.id);
       const dx = this.starWorld.x - view.renderPos.x;
@@ -255,19 +261,61 @@ export class TrappistScene {
     starView.glow.scale.setScalar(this.starDrawRadius * 2 * GLOW_EXTENT);
     starView.glow.quaternion.copy(camera.quaternion);
     starView.glow.visible = s.showGlow;
-    starView.glow.material.uniforms.uIntensity.value = s.exposure * 1.4;
+    // A flare lifts the halo and pulls its colour toward blue-white.
+    const blue = act.channelBoost[2];
+    const gu = starView.glow.material.uniforms;
+    // Logarithmic, like the eye: a superflare (~15 % of L★) roughly
+    // doubles the halo rather than whiting out the screen.
+    gu.uIntensity.value = s.exposure * 1.4 * (1 + 0.3 * Math.log10(1 + act.bolometricBoost / 0.002));
+    gu.uColor.value.copy(this._glowBase).lerp(this._glowFlare, Math.min(0.3, blue * 0.15));
 
     // 4. Uniforms.
     const su = starView.material.uniforms;
-    su.uTime.value = this.stellarClock;
-    su.uSpotAmount.value = s.starspots;
-    su.uFlareGain.value = s.flares;
+    su.uTime.value = this.wallClock;
     su.uDetail.value = s.highDetail ? 1 : 0;
-    su.uBrightness.value = 0.95 * s.exposure;
+    su.uBrightness.value = 0.72 * s.exposure;
+    su.uFaculae.value = s.faculae;
+
+    su.uSpotCount.value = Math.min(act.spots.length, MAX_SPOTS);
+    act.spots.slice(0, MAX_SPOTS).forEach((sp, i) => {
+      su.uSpot.value[i].set(sp.dir[0], sp.dir[1], sp.dir[2], sp.radius);
+    });
+
+    // Flare amplitude is a surface brightness chosen so that the kernel's
+    // disc-integrated light equals frac·L★ at the flare temperature:
+    //   amp = frac · (T★/Tf)⁴ · ldNorm · 2.2 / r_k²
+    // (2.2 is the kernel's Gaussian width; ldNorm the limb-darkened disc mean).
+    const [u1, u2] = STAR.activity.limbDarkening;
+    const ldNorm = 1 - u1 / 3 - u2 / 6;
+    const t4 = Math.pow(STAR.teff / STAR.activity.flareTemp, 4);
+    const rk = FLARE_KERNEL_RADIUS;
+    su.uFlareCount.value = Math.min(act.flares.length, MAX_FLARES);
+    act.flares.slice(0, MAX_FLARES).forEach((f, i) => {
+      su.uFlare.value[i].set(f.dir[0], f.dir[1], f.dir[2], rk);
+      const amp = f.peakFrac * f.envelope * t4 * ldNorm * 2.2 / (rk * rk);
+      su.uFlareInfo.value[i].set(amp, Math.min(1, f.t / f.lifetime), f.angle, f.seed);
+    });
+
+    // Starlight on each planet, plus the flare light that planet actually
+    // receives — channel by channel (strongest in the blue), and only from
+    // flares on the hemisphere facing it.
+    const k = s.flareLighting ? 1 : 0;
+    const cs = Math.cos(this.starSpin), sn = Math.sin(this.starSpin);
+    const boost = this._boost || (this._boost = [0, 0, 0]);
 
     for (const p of PLANETS) {
       const u = this.views.get(p.id).material.uniforms;
       const view = this.views.get(p.id);
+
+      this._tmpA.copy(view.renderPos).sub(this.starWorld).normalize();
+      const { x, y, z } = this._tmpA;
+      act.boostToward([x * cs - z * sn, y, x * sn + z * cs], boost);
+      this._lightColor.setRGB(
+        STARLIGHT.r * (1 + k * boost[0]),
+        STARLIGHT.g * (1 + k * boost[1]),
+        STARLIGHT.b * (1 + k * boost[2]),
+      );
+      view.flareBoost = boost[2];
       u.uTime.value = simDays;
       u.uSunPos.value.copy(this.starWorld);
       u.uSunRadius.value = this.starDrawRadius;
@@ -279,10 +327,11 @@ export class TrappistScene {
       view.mesh.updateWorldMatrix(true, false);
       u.uModelRot.value.setFromMatrix4(view.mesh.matrixWorld);
       u.uOccluderCount.value = 0;
+      u.uLightColor.value.copy(this._lightColor);
     }
 
     // 5. Sky, HZ, line of sight.
-    this.starfield.material.uniforms.uTime.value = this.stellarClock;
+    this.starfield.material.uniforms.uTime.value = this.wallClock;
     this.starfield.visible = s.showStars;
     this.milkyWay.visible = s.showStars;
     this.milkyWay.material.uniforms.uIntensity.value = s.milkyWay;
@@ -424,7 +473,7 @@ export class TrappistScene {
     const body = BODY_BY_ID[id];
     const nb = this.sim.nbody;
     if (body.kind === 'star') {
-      return { body, hz: this.hz };
+      return { body, hz: this.hz, activity: this.activity };
     }
     nb.relativePosition(id, STAR.id, this._r);
     nb.relativeVelocity(id, STAR.id, this._v);

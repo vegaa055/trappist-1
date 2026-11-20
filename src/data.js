@@ -28,6 +28,38 @@ export const STAR = {
 };
 STAR.mass = STAR.massSun;
 STAR.radiusKm = STAR.radiusSun * RSUN_KM;
+STAR.luminosityErg = STAR.luminositySun * 3.828e33;   // erg/s
+
+/**
+ * Magnetic activity. These numbers set the *statistics* the simulation draws
+ * from; individual spots and flares are random.
+ *
+ * Flares — K2 photometry: 42 flares in ~80 days with energies 1.3×10³⁰ to
+ * 1.2×10³³ erg, and a cumulative frequency distribution N(>E) ∝ E^−β with
+ * β ≈ 0.6 (Vida+ 2017; Paudel+ 2018 find similar). Below the K2 limit the same
+ * power law is extended to 10²⁹ erg, consistent with JWST catching at least one
+ * flare in every TRAPPIST-1 f visit (Lim+ 2026). Durations scale weakly with
+ * energy (minutes for small events, about an hour for the largest).
+ *
+ * Spots — K2 shows ~1 % rotational modulation on the 3.3-day period. Both dark
+ * spots and bright faculae are needed to fit the HST/JWST transit spectra; the
+ * temperature contrasts here are representative, not measured.
+ */
+STAR.activity = {
+  flareRateRef: 0.53,        // flares per day above flareERef (42 in ~80 d)
+  flareERef: 1.26e30,        // erg
+  ffdBeta: 0.59,             // cumulative FFD index
+  flareEMin: 1e29,
+  flareEMax: 1e34,
+  flareTemp: 9000,           // K — white-light flare continuum
+  flareTauRef: 6 / 1440,     // decay time (d) at 1e30 erg ...
+  flareTauIndex: 0.35,       // ... scaling as E^0.35
+  spotCoverage: 0.02,        // default: gives ~1–2 % rotational modulation in the K2 band
+  umbraDT: -500,             // K
+  penumbraDT: -220,          // K
+  faculaDT: 110,             // K
+  limbDarkening: [0.55, 0.25], // quadratic u1, u2 — red-optical, approximate
+};
 
 /** μ in Agol's Table 2 is (Mp / M*) × 1e5. */
 const fromMu = (mu) => mu * 1e-5 * STAR.massSun;

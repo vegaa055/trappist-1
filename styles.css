@@ -504,3 +504,13 @@ kbd {
   pointer-events: none; color: #8fb4ff; font-size: 10px; letter-spacing: 0.06em;
   background: none; opacity: 0.8;
 }
+
+.flare-log { list-style: none; margin: 0; padding: 0; font-family: var(--mono); font-size: 10.5px; }
+.flare-log li {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 8px;
+  padding: 3px 0; border-bottom: 1px solid var(--line); color: var(--ink-dim);
+}
+.flare-log li.is-skipped { opacity: 0.45; }
+.flare-log__e { color: var(--amber-soft); }
+.flare-log__peak { color: #a9c1ff; min-width: 70px; text-align: right; }
+.diag sup, .flare-log sup { font-size: 8px; }
