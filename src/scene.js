@@ -14,7 +14,8 @@ import { primaryMu, radiusAU, EARTH_DIR } from './system.js';
 import {
   habitableZone, bareRockDaysideTemp, equilibriumTemp, starAngularDiameter,
 } from './habitable.js';
-import { createPlanetMaterial } from './shaders/planet.js';
+import { createWorldMaterial, createAtmosphereMaterial, MAX_OCCLUDERS } from './shaders/world.js';
+import { irradiationTemp, T_FLOOR, thermalSummary } from './thermal.js';
 import { createStarMaterial, FLARE_KERNEL_RADIUS } from './shaders/star.js';
 import { StellarActivity, MAX_SPOTS, MAX_FLARES } from './activity.js';
 import { createStarfield, createMilkyWay } from './shaders/stars.js';
@@ -31,8 +32,12 @@ const STAR_SPHERE = new THREE.SphereGeometry(1, 160, 110);
 
 // Starlight colour. A 2566 K blackbody is a deep orange; a visitor's eye would
 // partly adapt to it, so the light that falls on the planets is a warm but not
-// fully saturated version. (Phase 3 makes this an explicit choice.)
+// fully saturated version.
 const STARLIGHT = new THREE.Color(1.0, 0.76, 0.56);
+
+// Irradiance is normalised so e's orbit = 1, with the same gentle falloff
+// the solar-system project uses (true 1/r² is a toggle).
+const FLUX_NORM_AU = 0.02925;
 
 class BodyView {
   constructor(body) {
@@ -112,20 +117,52 @@ export class TrappistScene {
       view.pivot.add(glow);
       view.glow = glow;
     } else {
-      const mat = createPlanetMaterial(body);
-      mat.uniforms.uLightColor.value.copy(STARLIGHT);
-      mat.uniforms.uFluxNorm.value = 0.02925;      // e's orbit = irradiance 1
-      const mesh = new THREE.Mesh(SPHERE, mat);
+      const mesh = new THREE.Mesh(SPHERE);
       mesh.userData.bodyId = body.id;
       view.spin.add(mesh);
       view.mesh = mesh;
-      view.material = mat;
+      view.seed = (PLANETS.indexOf(body) + 1) * 37.13;
+      view.T0 = irradiationTemp(body.aAU);
+      this._applyScenario(view, 0);
       this._buildOrbit(body);
       this._buildTrail(body);
     }
 
     this.views.set(body.id, view);
   }
+
+  /** Swap a planet's surface (and atmosphere) to scenario `index`. */
+  _applyScenario(view, index) {
+    const body = view.body;
+    const scenario = body.scenarios[index];
+    view.scenarioIndex = index;
+    view.scenario = scenario;
+
+    view.material?.dispose();
+    view.material = createWorldMaterial(body, scenario, view.seed);
+    view.mesh.material = view.material;
+    view.defaultBump = view.material.uniforms.uBump.value;
+
+    if (view.atmosphere) {
+      view.pivot.remove(view.atmosphere);
+      view.atmosphere.material.dispose();
+      view.atmosphere = null;
+    }
+    if (scenario.atmosphere) {
+      const shell = new THREE.Mesh(SPHERE, createAtmosphereMaterial(scenario.atmosphere));
+      shell.renderOrder = 10;
+      view.pivot.add(shell);
+      view.atmosphere = shell;
+    }
+  }
+
+  setScenario(id, scenarioId) {
+    const view = this.views.get(id);
+    const index = view.body.scenarios.findIndex((sc) => sc.id === scenarioId);
+    if (index >= 0 && index !== view.scenarioIndex) this._applyScenario(view, index);
+  }
+
+  scenarioOf(id) { return this.views.get(id)?.scenario; }
 
   _buildOrbit(body) {
     const geo = new THREE.BufferGeometry();
@@ -302,12 +339,13 @@ export class TrappistScene {
     const k = s.flareLighting ? 1 : 0;
     const cs = Math.cos(this.starSpin), sn = Math.sin(this.starSpin);
     const boost = this._boost || (this._boost = [0, 0, 0]);
-
     for (const p of PLANETS) {
-      const u = this.views.get(p.id).material.uniforms;
       const view = this.views.get(p.id);
+      const u = view.material.uniforms;
 
-      this._tmpA.copy(view.renderPos).sub(this.starWorld).normalize();
+      this._tmpA.copy(view.renderPos).sub(this.starWorld);
+      const distAU = this._tmpA.length() / UNITS_PER_AU;
+      this._tmpA.normalize();
       const { x, y, z } = this._tmpA;
       act.boostToward([x * cs - z * sn, y, x * sn + z * cs], boost);
       this._lightColor.setRGB(
@@ -316,18 +354,40 @@ export class TrappistScene {
         STARLIGHT.b * (1 + k * boost[2]),
       );
       view.flareBoost = boost[2];
+
       u.uTime.value = simDays;
-      u.uSunPos.value.copy(this.starWorld);
-      u.uSunRadius.value = this.starDrawRadius;
-      u.uSunFalloff.value = s.realisticFalloff ? 2.0 : 0.35;
-      u.uUnitsPerAU.value = UNITS_PER_AU;
+      u.uStarPos.value.copy(this.starWorld);
+      u.uStarRadius.value = this.starDrawRadius;
+      u.uIrradiance.value = Math.pow(FLUX_NORM_AU / distAU, s.realisticFalloff ? 2.0 : 0.35);
       u.uExposure.value = s.exposure;
       u.uDetail.value = s.highDetail ? 1 : 0;
-      u.uBump.value = s.showBump ? (p.params?.bump ?? 0) : 0;
+      u.uBump.value = s.showBump ? view.defaultBump : 0;
       view.mesh.updateWorldMatrix(true, false);
       u.uModelRot.value.setFromMatrix4(view.mesh.matrixWorld);
-      u.uOccluderCount.value = 0;
       u.uLightColor.value.copy(this._lightColor);
+      u.uThermal.value = s.thermalView ? 1 : 0;
+      u.uT0.value = view.T0;
+      u.uTFloor.value = T_FLOOR;
+
+      // Every other planet can cast a shadow on this one.
+      let n = 0;
+      for (const other of PLANETS) {
+        if (other === p || n >= MAX_OCCLUDERS) continue;
+        const ov = this.views.get(other.id);
+        u.uOccPos.value[n].copy(ov.renderPos);
+        u.uOccRadius.value[n] = ov.drawRadius;
+        n++;
+      }
+      u.uOccCount.value = n;
+
+      if (view.atmosphere) {
+        const h = view.scenario.atmosphere.height;
+        view.atmosphere.scale.setScalar(view.drawRadius * (1 + h));
+        view.atmosphere.visible = s.showAtmospheres && !s.thermalView;
+        const au = view.atmosphere.material.uniforms;
+        au.uStarPos.value.copy(this.starWorld);
+        au.uLightColor.value.copy(this._lightColor).multiplyScalar(s.exposure * u.uIrradiance.value);
+      }
     }
 
     // 5. Sky, HZ, line of sight.
@@ -490,6 +550,8 @@ export class TrappistScene {
       starSizeDeg: starAngularDiameter(dist),
       teq: equilibriumTemp(body.aAU),
       tDayBareRock: bareRockDaysideTemp(body.aAU),
+      scenario: this.views.get(id).scenario,
+      thermal: thermalSummary(this.views.get(id).scenario, body.aAU),
       inHZ: body.aAU >= this.hz.runawayGreenhouse.au && body.aAU <= this.hz.maxGreenhouse.au,
     };
   }

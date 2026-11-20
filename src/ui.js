@@ -1,6 +1,7 @@
 // DOM wiring: control panel, body picker, info card, resonance readout.
 
 import { STAR, PLANETS, BODY_BY_ID } from './data.js';
+import { STATUS, MEASURED_15UM, MEASURED_NIGHT } from './scenarios.js';
 import { DEFAULT_PLANET_SCALE, DEFAULT_STAR_SCALE } from './constants.js';
 
 const TOGGLES = [
@@ -9,6 +10,8 @@ const TOGGLES = [
   { key: 'showLabels', label: 'Labels' },
   { key: 'showHabitableZone', label: 'Habitable zone' },
   { key: 'showLineOfSight', label: 'Line of sight' },
+  { key: 'thermalView', label: 'Thermal 15 µm' },
+  { key: 'showAtmospheres', label: 'Atmospheres' },
   { key: 'showGlow', label: 'Glow' },
   { key: 'flareLighting', label: 'Flare light' },
   { key: 'showStars', label: 'Stars' },
@@ -110,6 +113,7 @@ export function createUI({ settings, callbacks }) {
   }
   const syncToggles = () => {
     for (const [key, btn] of toggleButtons) btn.classList.toggle('is-on', !!settings[key]);
+    $('thermal-legend').hidden = !settings.thermalView;
   };
   syncToggles();
 
@@ -207,6 +211,37 @@ export function createUI({ settings, callbacks }) {
       els.infoFindings.textContent = body.findings.summary;
       els.infoSources.textContent = body.findings.sources;
     }
+    renderScenarios(body);
+  }
+
+  // ------------------------------------------------------------ scenarios
+  const scenarioButtons = new Map();
+
+  function renderScenarios(body) {
+    const wrap = $('info-scenarios-wrap');
+    scenarioButtons.clear();
+    const isPlanet = body.kind === 'planet';
+    wrap.hidden = !isPlanet;
+    if (!isPlanet) return;
+    const list = $('info-scenarios');
+    list.innerHTML = '';
+    for (const sc of body.scenarios) {
+      const st = STATUS[sc.status];
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'scenario';
+      btn.innerHTML = `<span class="scenario__label">${sc.label}</span>`
+        + `<span class="scenario__status" style="color:${st.color};border-color:${st.color}">${st.label}</span>`;
+      btn.addEventListener('click', () => callbacks.onScenario?.(body.id, sc.id));
+      list.appendChild(btn);
+      scenarioButtons.set(sc.id, btn);
+    }
+  }
+
+  function markScenario(scenario) {
+    if (!scenario) return;
+    for (const [id, btn] of scenarioButtons) btn.classList.toggle('is-active', id === scenario.id);
+    $('info-scenario-note').textContent = scenario.note;
   }
 
   function renderInfo(desc) {
@@ -237,9 +272,24 @@ export function createUI({ settings, callbacks }) {
       stats.push(['starlight', `${fmt(b.irradiation, 3)} × Earth's`]);
       stats.push(['star in the sky', `${fmt(desc.starSizeDeg, 2)}° (Sun from Earth: 0.53°)`]);
       stats.push(['equilibrium temp', kelvin(desc.teq)]);
-      stats.push(['bare-rock dayside', kelvin(desc.tDayBareRock)]);
       stats.push(['habitable zone', desc.inHZ ? 'inside (conservative)' : 'outside']);
+      const th = desc.thermal;
+      stats.push(['<b>this scenario</b>', `albedo ${desc.scenario.albedo}, heat transport ${Math.round(desc.scenario.redistribution * 100)} %`]);
+      stats.push(['substellar surface', kelvin(th.substellar)]);
+      stats.push(['dayside at 15 µm', `<b>${fmtInt(th.day15)} K</b>`]);
+      for (const m of MEASURED_15UM[b.id] || []) {
+        const z = (th.day15 - m.value) / m.err;
+        const tone = Math.abs(z) <= 1 ? 'good' : Math.abs(z) <= 2 ? 'fair' : 'poor';
+        stats.push([`JWST: ${m.source}`, `${m.value} ± ${m.err} K <span class="z z--${tone}">${z >= 0 ? '+' : ''}${z.toFixed(1)}σ</span>`]);
+      }
+      stats.push(['night side at 15 µm', `${fmtInt(th.night15)} K (${fmtInt(th.night15 - 273.15)} °C)`]);
+      const night = MEASURED_NIGHT[b.id];
+      if (night) {
+        const ok = th.night15 <= night.max;
+        stats.push([`JWST: ${night.source}, night`, `below ${night.max} K <span class="z z--${ok ? 'good' : 'poor'}">${ok ? 'passes' : 'too warm'}</span>`]);
+      }
     }
+    markScenario(desc.scenario);
     els.infoStats.innerHTML = stats
       .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
       .join('');

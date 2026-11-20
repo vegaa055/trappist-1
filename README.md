@@ -21,6 +21,15 @@ modulation and flare frequency distribution). Each flare's extra light,
 strongest in the blue, reaches only the planets facing it. See
 [PLAN.md](PLAN.md) for the numbers and the liberties taken.
 
+## The planets
+
+Each planet has a set of scenarios graded against what JWST has measured
+(*matches*, *consistent*, *hypothesis*, *disfavoured*, *ruled out*). Choosing
+one changes the surface, any atmosphere, and the thermal model. The planet's
+card then shows the 15 µm dayside temperature that scenario predicts next to
+the JWST value, with the difference in σ. Press `I` for the thermal view: the
+same temperature field, on a fixed 0–600 K scale.
+
 ## Running it
 
 ES modules need a server:
@@ -50,5 +59,6 @@ TTVs and Laplace angles against Agol et al. 2021. The results are in
 | click a body or label, or `1`–`7`, `0` | select and follow it (`0` is the star) |
 | `space` | pause |
 | `O` / `T` / `L` / `Z` | orbits / trails / labels / habitable zone |
+| `I` | thermal 15 µm view |
 | `H` | hide the interface |
 | `Esc` | deselect and free the camera |

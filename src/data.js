@@ -7,10 +7,11 @@
 //   * Table 6 — inclination, radius, density, irradiation.
 // Star: Agol 2021 Tables 5/7 (mass from Mann+ 2019, luminosity from Ducrot+ 2020).
 //
-// Surface appearance is a stand-in in Phase 1 and is replaced by JWST-driven
-// scenarios in Phase 3 — the `findings` block, not the colours, is the science.
+// Appearance comes from scenarios.js: each planet has several JWST-graded
+// possibilities, and the `findings` block summarises what was measured.
 
 import { MEARTH_MSUN, REARTH_KM, RSUN_KM } from './constants.js';
+import { SCENARIOS } from './scenarios.js';
 
 export const STAR = {
   id: 'star',
@@ -69,9 +70,6 @@ const RAW = [
     letter: 'b',
     agol: { P: 1.510826, t0: 7257.55044, ecosw: -0.00215, esinw: 0.00217, mu: 4.596 },
     inc: 89.728, radiusEarth: 1.116, densityGcc: 5.425, aAU: 0.01154, irradiation: 4.153,
-    surface: 'cratered',
-    colors: ['#3b3632', '#1f1b19', '#5d544d', '#121010'],
-    params: { craterDensity: 18, craterDepth: 0.8, bump: 0.45, roughness: 1.1 },
     findings: {
       status: 'No thick atmosphere',
       summary: 'Dayside ≈ 500 K at 15 µm — what a dark bare rock with no heat redistribution should emit. No CO₂ absorption. A 2026 phase curve finds the night side below −200 °C.',
@@ -82,9 +80,6 @@ const RAW = [
     letter: 'c',
     agol: { P: 2.421937, t0: 7258.58728, ecosw: 0.00055, esinw: 0.00001, mu: 4.374 },
     inc: 89.778, radiusEarth: 1.097, densityGcc: 5.447, aAU: 0.01580, irradiation: 2.214,
-    surface: 'cratered',
-    colors: ['#575049', '#2d2925', '#7d7268', '#181513'],
-    params: { craterDensity: 22, craterDepth: 0.9, bump: 0.45, roughness: 1.0 },
     findings: {
       status: 'No thick atmosphere',
       summary: 'Dayside ≈ 380 K at 15 µm. A Venus-like CO₂ atmosphere with clouds is ruled out; bare rock or a thin cloud-free CO₂ layer remain. The 2026 phase curve shows no heat reaching the night side.',
@@ -95,9 +90,6 @@ const RAW = [
     letter: 'd',
     agol: { P: 4.049219, t0: 7257.06768, ecosw: -0.00496, esinw: 0.00267, mu: 1.297 },
     inc: 89.896, radiusEarth: 0.788, densityGcc: 4.354, aAU: 0.02227, irradiation: 1.115,
-    surface: 'martian',
-    colors: ['#7f6650', '#4f3b2c', '#a68a6c', '#33251b'],
-    params: { bump: 0.4, dust: 0.4, iceCap: 0.97 },
     findings: {
       status: 'Earth-like atmosphere unlikely',
       summary: 'No water, methane or CO₂ features in the transmission spectrum. Remaining options: bare rock, a very thin Mars-like atmosphere, or high-altitude clouds.',
@@ -108,9 +100,6 @@ const RAW = [
     letter: 'e',
     agol: { P: 6.101013, t0: 7257.82771, ecosw: 0.00433, esinw: -0.00461, mu: 2.313 },
     inc: 89.793, radiusEarth: 0.920, densityGcc: 4.885, aAU: 0.02925, irradiation: 0.646,
-    surface: 'terran',
-    colors: ['#1d3a5a', '#5b5240', '#8a7d62', '#e8eef2'],
-    params: { seaLevel: 0.08, cloud: 0.35, specular: 0.5, iceCap: 0.72, bump: 0.3 },
     findings: {
       status: 'Open — 50/50',
       summary: 'Hydrogen-rich and CO₂-dominated atmospheres are ruled out. A nitrogen-dominated atmosphere with traces of methane remains possible, as does bare rock. Fifteen more transits are scheduled. The ocean shown here is a hypothesis.',
@@ -121,9 +110,6 @@ const RAW = [
     letter: 'f',
     agol: { P: 9.207540, t0: 7257.07426, ecosw: -0.00840, esinw: -0.00051, mu: 3.475 },
     inc: 89.740, radiusEarth: 1.045, densityGcc: 5.009, aAU: 0.03849, irradiation: 0.373,
-    surface: 'icy',
-    colors: ['#c9c2b8', '#8f8577', '#ece6dc', '#6b6156'],
-    params: { bump: 0.25, cracks: 0.6 },
     findings: {
       status: 'No thick H₂ atmosphere',
       summary: 'Five NIRISS transits rule out hydrogen/helium atmospheres thicker than ~20 mbar. Flares hit every visit, but no starspot contamination was found. Heavier atmospheres are not yet constrained.',
@@ -134,9 +120,6 @@ const RAW = [
     letter: 'g',
     agol: { P: 12.352446, t0: 7257.71462, ecosw: 0.00380, esinw: 0.00128, mu: 4.418 },
     inc: 89.742, radiusEarth: 1.129, densityGcc: 5.042, aAU: 0.04683, irradiation: 0.252,
-    surface: 'icy',
-    colors: ['#b8c3cc', '#7c8790', '#e2e9ee', '#59636b'],
-    params: { bump: 0.25, cracks: 0.8 },
     findings: {
       status: 'Not yet constrained',
       summary: 'Inside the habitable zone but far enough out that it may be ice-covered. Current JWST data are insufficient to say whether it has an atmosphere.',
@@ -147,9 +130,6 @@ const RAW = [
     letter: 'h',
     agol: { P: 18.772866, t0: 7249.60676, ecosw: -0.00365, esinw: -0.00002, mu: 1.088 },
     inc: 89.805, radiusEarth: 0.755, densityGcc: 4.147, aAU: 0.06189, irradiation: 0.144,
-    surface: 'icy',
-    colors: ['#d4d2cf', '#9c9893', '#f2f0ec', '#6e6a65'],
-    params: { bump: 0.3, cracks: 0.4 },
     findings: {
       status: 'Not yet constrained',
       summary: 'Outside the habitable zone and receiving about a seventh of Earth\'s sunlight — likely a frozen world. Its period was pinned down by the resonance chain before it was confirmed (Luger+ 2017).',
@@ -177,6 +157,7 @@ export const PLANETS = RAW.map((p) => {
     tidallyLocked: true,
     tilt: 0,
     uiColor: PLANET_COLORS[p.letter],
+    scenarios: SCENARIOS[p.letter],
   };
 });
 

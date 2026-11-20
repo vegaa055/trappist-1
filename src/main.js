@@ -44,6 +44,8 @@ const settings = {
   faculae: 1,
   flareRate: 1,
   flareLighting: true,
+  thermalView: false,
+  showAtmospheres: true,
 
   showOrbits: true,
   showTrails: false,
@@ -156,6 +158,10 @@ const ui = createUI({
     onEpoch: (which) => jumpTo(which === 'now' ? julianDayNow() : null),
     onToggle: (key) => { if (key === 'showTrails' && settings.showTrails) world.clearTrails(); },
     onBloom: (v) => { bloom.strength = v; },
+    onScenario: (id, scenarioId) => {
+      world.setScenario(id, scenarioId);
+      ui.renderInfo(world.describe(id));
+    },
     onSuperflare: () => {
       world.activity.trigger(3e33);
       if (settings.daysPerSecond > 0.05) ui.setSpeed(0.02);
@@ -232,6 +238,7 @@ window.addEventListener('keydown', (e) => {
       break;
     case 'l': settings.showLabels = !settings.showLabels; ui.syncToggles(); break;
     case 'z': settings.showHabitableZone = !settings.showHabitableZone; ui.syncToggles(); break;
+    case 'i': settings.thermalView = !settings.thermalView; ui.syncToggles(); break;
     default: break;
   }
 });
@@ -339,4 +346,18 @@ requestAnimationFrame(async () => {
   }
 });
 
-window.trappist = { sim, world, settings, camera, controls, renderer, composer, bloom };
+/**
+ * Frame a planet from its day side, `offset` radians around from the
+ * substellar direction (0 = full phase, π/2 = half lit). Handy from the
+ * console, and used by the guided tour later.
+ */
+function viewDayside(id, offset = 0.8, elevation = 0.25) {
+  focusBody(id);
+  const view = world.viewOf(id);
+  const d = new THREE.Vector3().copy(world.starWorld).sub(view.renderPos).normalize();
+  const theta = Math.atan2(d.x, d.z) + offset;
+  controls.spherical.theta = theta;
+  controls.spherical.phi = Math.PI / 2 - elevation;
+}
+
+window.trappist = { sim, world, settings, camera, controls, renderer, composer, bloom, viewDayside };

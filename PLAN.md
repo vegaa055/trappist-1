@@ -257,8 +257,45 @@ Deferred to later phases: the stand-in surfaces and star shader (Phases 2–3).
   corona).
 - Slider: activity level; toggle: flare log.
 
-### Phase 3 — The planets as JWST sees them
+### Phase 3 — The planets as JWST sees them ✅ done (20 Nov 2026)
 *Goal: seven distinct worlds, each grounded in its own observations.*
+
+**What was built**
+- `src/scenarios.js`: 2–4 scenarios per planet (23 in all), each graded
+  *matches JWST / consistent / hypothesis / disfavoured / ruled out*, with a
+  surface type, Bond albedo, heat-redistribution efficiency, optional
+  atmosphere, and a one-paragraph reason.
+- `src/thermal.js`: tidally locked energy balance
+  T⁴(θ) = (1−A)·T₀⁴·[(1−ε)·max(cos θ,0) + ε/4] with a 40 K interior floor, and
+  the disc-integrated **15 µm brightness temperature** JWST would measure at
+  eclipse (dayside) and at transit (nightside).
+- `src/shaders/world.js`: new locked-frame surface shader with six routines
+  (bare rock, lava, dry/Mars-like with antistellar frost, eyeball ocean with
+  substellar cyclone, snowball with lineae, cloud deck), a **thermal 15 µm
+  view** (key `I`, inferno scale 0–600 K, the same T(θ) as the card), thin
+  atmosphere shells only where a scenario has air, and **planet-on-planet
+  shadows** (up to six occluders, with penumbrae).
+- Info card: scenario picker, model vs JWST dayside with σ, and a night-side
+  pass/fail against the 2026 phase-curve limit.
+
+**Checked against JWST** (dayside 15 µm; Gillon+ 2026 / Greene+ 2023 / Zieba+ 2023):
+
+| Scenario | Model | vs measured | Night < 73 K |
+| --- | --- | --- | --- |
+| b bare dark rock (A 0.1) | 489 K | −0.1σ / −0.5σ | ✓ |
+| b thick CO₂ (ruled out) | 404 K | −5.1σ / −3.7σ | ✗ 356 K |
+| c bare rock (A 0.3) | 393 K | +1.1σ / +0.4σ | ✓ |
+| c thin CO₂ (A 0.25, ε 0.002) | 400 K | +1.3σ / +0.6σ | ✓ |
+| c Venus-like (ruled out) | 240 K | −5.6σ / −4.5σ | ✗ 240 K |
+
+Building this turned up a real constraint. A "thin CO₂" atmosphere on c carrying
+even 25 % of the heat around gives a 231 K night side, which breaks the
+2026 limit. Anything that survives must redistribute well under 1 % of it.
+
+**Liberties**: albedos and redistribution efficiencies are representative,
+not fitted; surface textures are procedural illustrations of each scenario;
+planet-on-planet shadows use the drawn (enlarged) radii, so they are larger
+than real ones.
 
 - **Tidally locked frame:** substellar point always faces the star; spin phase
   derived from the orbit, not a clock.

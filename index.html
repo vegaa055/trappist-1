@@ -154,11 +154,22 @@
       <dl class="info__stats" id="info-stats"></dl>
       <p class="info__findings" id="info-findings"></p>
       <p class="info__sources" id="info-sources"></p>
+      <div class="scenarios" id="info-scenarios-wrap">
+        <h3 class="scenarios__title">What it could look like</h3>
+        <div class="scenarios__list" id="info-scenarios"></div>
+        <p class="scenarios__note" id="info-scenario-note"></p>
+      </div>
       <div class="row row--buttons">
         <button class="btn btn--primary" id="btn-follow" type="button">Follow</button>
         <button class="btn" id="btn-release" type="button">Free camera</button>
       </div>
     </section>
+
+    <div class="legend" id="thermal-legend" hidden>
+      <span class="legend__title">Surface temperature · 15 µm view</span>
+      <div class="legend__bar"></div>
+      <div class="legend__ticks"><span>0 K</span><span>200</span><span>400</span><span>600 K</span></div>
+    </div>
 
     <footer class="help" id="help">
       <span><kbd>drag</kbd> orbit</span>
@@ -167,6 +178,7 @@
       <span><kbd>click</kbd> select</span>
       <span><kbd>space</kbd> pause</span>
       <span><kbd>1–7</kbd> planets</span>
+      <span><kbd>I</kbd> thermal</span>
       <span><kbd>H</kbd> hide UI</span>
     </footer>
 

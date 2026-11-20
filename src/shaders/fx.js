@@ -62,10 +62,12 @@ export function createGlowMaterial(color) {
 
 const HZ_VERT = /* glsl */ `
 varying vec2 vLocal;
+varying vec3 vWorld;
 #include <common>
 #include <logdepthbuf_pars_vertex>
 void main() {
   vLocal = position.xy;
+  vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   #include <logdepthbuf_vertex>
 }
@@ -77,17 +79,21 @@ uniform float uOptIn, uConsIn, uConsOut, uOptOut;
 uniform float uOpacity;
 uniform vec3 uColor;
 varying vec2 vLocal;
+varying vec3 vWorld;
 #include <common>
 #include <logdepthbuf_pars_fragment>
 void main() {
   #include <logdepthbuf_fragment>
+  // e, f and g orbit inside the band; fade it near the camera so it does not
+  // slice across a planet you are looking at up close.
+  float near = smoothstep(1.5, 9.0, distance(cameraPosition, vWorld));
   float r = length(vLocal);
   float w = fwidth(r);
   float cons = smoothstep(uConsIn - w, uConsIn + w, r) * (1.0 - smoothstep(uConsOut - w, uConsOut + w, r));
   float opt = smoothstep(uOptIn - w, uOptIn + w, r) * (1.0 - smoothstep(uOptOut - w, uOptOut + w, r));
   // Bright rims at the conservative edges so the boundary reads at any zoom.
   float rim = exp(-pow((r - uConsIn) / (w * 2.5), 2.0)) + exp(-pow((r - uConsOut) / (w * 2.5), 2.0));
-  float a = (cons * 0.16 + (opt - cons) * 0.06 + rim * 0.35) * uOpacity;
+  float a = (cons * 0.16 + (opt - cons) * 0.06 + rim * 0.35) * uOpacity * near;
   if (a < 0.002) discard;
   gl_FragColor = vec4(uColor * a, a);
 }
