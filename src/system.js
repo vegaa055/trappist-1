@@ -92,7 +92,7 @@ export function buildSystem() {
  * them so a progress bar can update. There is no Keplerian shortcut here: the
  * planets' mutual tugs over the intervening years are part of the state.
  */
-export async function advanceTo(sim, targetJD, { dt, onProgress, budgetMs = 120 } = {}) {
+export async function advanceTo(sim, targetJD, { dt, onProgress, onStep = null, budgetMs = 120 } = {}) {
   const total = targetJD - (sim.epochJD + sim.nbody.time);
   if (total <= 0) return;
   let done = 0;
@@ -103,7 +103,7 @@ export async function advanceTo(sim, targetJD, { dt, onProgress, budgetMs = 120 
     const start = performance.now();
     while (done < total && performance.now() - start < budgetMs) {
       const chunk = Math.min(5, total - done);
-      sim.nbody.advance(chunk, dt);
+      sim.nbody.advance(chunk, dt, Infinity, onStep);
       done += chunk;
     }
     onProgress?.(done / total);

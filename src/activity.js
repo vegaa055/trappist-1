@@ -52,6 +52,7 @@ export class StellarActivity {
     this.spots = [];
     this.flares = [];
     this.log = [];                 // most recent first
+    this.physFlares = [];          // every flare, with real (unstretched) timing
     this.flareCount = 0;
     this.observedDays = 0;
     this.time = 0;                 // sim days seen by the activity model
@@ -193,6 +194,7 @@ export class StellarActivity {
 
     this.flareCount++;
     this.log.unshift({ simTime, energy, peakFrac, shown: false });
+    this.physFlares.push({ start: simTime, dir, tauR, tauD, lifetime, peakFrac });
     if (this.log.length > 14) this.log.pop();
 
     if (this.flares.length < MAX_FLARES) {
@@ -328,6 +330,53 @@ export class StellarActivity {
     for (const [, d] of m.history) { lo = Math.min(lo, d); hi = Math.max(hi, d); }
     m.p2p = m.history.length > 1 ? hi - lo : 0;
     return deficit;
+  }
+
+  // ------------------------------------------------- photometry toward Earth
+
+  /**
+   * Fractional dimming from spots seen from direction `earthLocal` at
+   * wavelength λ with quadratic limb darkening (u1, u2).
+   */
+  spotDeficit(earthLocal, lambda, [u1, u2]) {
+    const p = this.params;
+    const ldNorm = 1 - u1 / 3 - u2 / 6;
+    const umbra = planckRatio(STAR.teff + p.umbraDT, STAR.teff, lambda);
+    const pen = planckRatio(STAR.teff + p.penumbraDT, STAR.teff, lambda);
+    const contrast = 1 - (0.3 * umbra + 0.7 * pen);
+    let deficit = 0;
+    for (const s of this.spots) {
+      const mu = s.dir[0] * earthLocal[0] + s.dir[1] * earthLocal[1] + s.dir[2] * earthLocal[2];
+      if (mu <= 0) continue;
+      const om = 1 - mu;
+      deficit += contrast * s.radius * s.radius * mu * (1 - u1 * om - u2 * om * om) / ldNorm;
+    }
+    return deficit;
+  }
+
+  /**
+   * Fractional brightening from flares toward Earth at simulated time t and
+   * wavelength λ, using each flare's *physical* time profile (the on-screen
+   * stretch does not apply here). `spin` is the star's rotation angle at t.
+   */
+  flareExcess(t, spin, lambda) {
+    const factor = Math.pow(STAR.teff / this.params.flareTemp, 4)
+      * planckRatio(this.params.flareTemp, STAR.teff, lambda);
+    const sn = Math.sin(spin), cs = Math.cos(spin);
+    let total = 0;
+    for (const f of this.physFlares) {
+      const age = t - f.start;
+      if (age <= 0 || age > f.lifetime) continue;
+      const mu = -f.dir[0] * sn + f.dir[2] * cs;       // toward Earth (scene +z)
+      if (mu <= 0) continue;
+      total += f.peakFrac * StellarActivity.envelope({ t: age, tauR: f.tauR, tauD: f.tauD }) * 4 * mu;
+    }
+    return total * factor;
+  }
+
+  prunePhysFlares(t) {
+    if (this.physFlares.length > 400) this.physFlares.splice(0, this.physFlares.length - 400);
+    this.physFlares = this.physFlares.filter((f) => t - f.start <= f.lifetime);
   }
 
   observedFlareRate() {

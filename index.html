@@ -54,6 +54,16 @@
       </section>
 
       <section class="group">
+        <h2>Observe</h2>
+        <p class="note">See the system the way JWST does: edge-on from 40 light-years, every planet crossing a
+          spotted, flaring star.</p>
+        <div class="row row--buttons">
+          <button id="btn-earth" class="btn" type="button">View from Earth <kbd>E</kbd></button>
+          <button id="btn-observatory" class="btn" type="button">Observatory <kbd>J</kbd></button>
+        </div>
+      </section>
+
+      <section class="group">
         <h2>Scale</h2>
         <p class="note">The star is drawn at its true size. Planets are enlarged so they stay visible; orbits and
           physics are always true to scale.</p>
@@ -159,11 +169,46 @@
         <div class="scenarios__list" id="info-scenarios"></div>
         <p class="scenarios__note" id="info-scenario-note"></p>
       </div>
+      <div class="obs" id="info-obs-wrap">
+        <h3 class="scenarios__title">Observations</h3>
+        <ol class="obs__list" id="info-obs"></ol>
+      </div>
       <div class="row row--buttons">
         <button class="btn btn--primary" id="btn-follow" type="button">Follow</button>
         <button class="btn" id="btn-release" type="button">Free camera</button>
       </div>
     </section>
+
+    <section class="observatory" id="observatory" hidden>
+      <header class="observatory__head">
+        <div class="tabs" role="tablist">
+          <button class="tab is-active" type="button" data-tab="lc">Light curve</button>
+          <button class="tab" type="button" data-tab="ttv">Transit timing</button>
+          <button class="tab" type="button" data-tab="timeline">Timeline</button>
+        </div>
+        <div class="observatory__tools" id="lc-tools">
+          <button class="chip is-active" type="button" data-band="vis">visible</button>
+          <button class="chip" type="button" data-band="nir">near-IR</button>
+        </div>
+        <button class="info__close" id="observatory-close" type="button" aria-label="Close">×</button>
+      </header>
+      <div class="observatory__pane" data-pane="lc">
+        <canvas class="observatory__canvas" id="lc-canvas"></canvas>
+        <p class="observatory__note" id="lc-note"></p>
+        <p class="observatory__note muted" id="lc-depths"></p>
+      </div>
+      <div class="observatory__pane" data-pane="ttv" hidden>
+        <canvas class="observatory__canvas" id="ttv-canvas"></canvas>
+        <p class="observatory__note">Observed minus predicted transit times against a straight-line ephemeris, from the
+          2015 epoch to now. The planets tug each other early and late on a ~490-day cycle — this is how their masses were
+          measured. Click a legend entry to hide a planet.</p>
+      </div>
+      <ol class="timeline observatory__pane" data-pane="timeline" id="timeline" hidden></ol>
+    </section>
+
+    <div class="earth-hud" id="earth-hud" hidden>
+      <b>View from Earth</b> · line of sight 40.7 ly · true sizes · <kbd>scroll</kbd> zoom · <kbd>E</kbd> exit
+    </div>
 
     <div class="legend" id="thermal-legend" hidden>
       <span class="legend__title">Surface temperature · 15 µm view</span>
@@ -179,6 +224,8 @@
       <span><kbd>space</kbd> pause</span>
       <span><kbd>1–7</kbd> planets</span>
       <span><kbd>I</kbd> thermal</span>
+      <span><kbd>E</kbd> Earth view</span>
+      <span><kbd>J</kbd> observatory</span>
       <span><kbd>H</kbd> hide UI</span>
     </footer>
 

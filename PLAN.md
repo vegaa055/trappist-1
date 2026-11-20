@@ -313,8 +313,47 @@ than real ones.
   thin-atmosphere shells only where a scenario allows one.
 - Planet–planet shadows and the star's eclipse by planets.
 
-### Phase 4 — Observing the system
+### Phase 4 — Observing the system ✅ done (20 Nov 2026)
 *Goal: see what JWST sees and why it is hard.*
+
+**What was built**
+- **View from Earth** (`E`): a camera 2 AU out along the real line of sight
+  with a 0.12° field (scroll to zoom out to 8°), effectively orthographic.
+  Planets switch to true size while it is on. The orbits appear edge-on, offset
+  by their real impact parameters, and planets cross the spotted disc as
+  silhouettes.
+- **Photometer** (`src/observe.js`): one sample per integrator step (every 5.76
+  simulated minutes), so even b's 36-minute transit is resolved at any time
+  rate. F = 1 − transits − spot dimming + flare light:
+  - transits use true radii, the N-body sky separation, exact circle-overlap
+    area at ingress/egress, and quadratic limb darkening at the chord;
+  - spots use the visible population at the star's rotation angle at that
+    instant;
+  - flares use their **physical** time profiles (not the on-screen stretch),
+    weighted by how squarely they face Earth, and include the ones never drawn.
+  - Two bands: visible 0.6 µm and near-IR 1.5 µm. Spots and flares weigh far
+    more in the visible.
+- **Observatory drawer** (`J`): light curve (window follows the time rate,
+  per-pixel min/max binning, transit labels), **transit-timing variations**
+  (O−C against a running linear fit, 2015 → now, recorded during the boot
+  integration so the full 11-year history is there at load), and a
+  **discovery timeline**.
+- **Observation lists** on every planet card: facility, what was taken, the
+  result, and the paper, linked only where the identifier was verified.
+
+**Checks**
+- Peak transit depths at disc centre: b 0.86 %, c 0.83 %, d 0.43 %, e 0.58 %,
+  f 0.74 %, g 0.86 %, h 0.38 % (near-IR), i.e. (Rp/R★)² times the
+  limb-darkening boost.
+- Minimum impact parameters from the integrated geometry: b 0.10, c 0.11,
+  d 0.07, e 0.19, f 0.32, g 0.38, h 0.38.
+- Boot integration records 2,721 transits of b over 11.3 years (expected
+  4,116 d ÷ 1.51 d ≈ 2,725).
+
+**Liberties**: limb-darkening coefficients per band are representative; the
+small-planet approximation evaluates limb darkening at a single point of the
+covered chord; planet–planet overlap during simultaneous transits is not
+subtracted; spots crossed by a transiting planet are not modelled.
 
 - **Earth view camera:** looking back along the line of sight, so all seven
   planets cross the tiny disc.

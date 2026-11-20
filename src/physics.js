@@ -125,11 +125,14 @@ export class NBodySystem {
    * Advance by `days`, splitting into substeps no larger than dtMax.
    * Returns the number of substeps actually taken.
    */
-  advance(days, dtMax, maxSubsteps = Infinity) {
+  advance(days, dtMax, maxSubsteps = Infinity, onStep = null) {
     if (days === 0) return 0;
     const steps = Math.min(maxSubsteps, Math.max(1, Math.ceil(Math.abs(days) / dtMax)));
     const dt = days / steps;
-    for (let s = 0; s < steps; s++) this.step(dt);
+    for (let s = 0; s < steps; s++) {
+      this.step(dt);
+      if (onStep) onStep(this);
+    }
     return steps;
   }
 

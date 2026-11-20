@@ -2,6 +2,7 @@
 
 import { STAR, PLANETS, BODY_BY_ID } from './data.js';
 import { STATUS, MEASURED_15UM, MEASURED_NIGHT } from './scenarios.js';
+import { OBSERVATIONS } from './observations.js';
 import { DEFAULT_PLANET_SCALE, DEFAULT_STAR_SCALE } from './constants.js';
 
 const TOGGLES = [
@@ -146,6 +147,8 @@ export function createUI({ settings, callbacks }) {
   slider('in-flare-rate', 'val-flare-rate',
     (v) => { settings.flareRate = v / 100; }, (v) => (v === 100 ? 'observed (K2)' : `${(v / 100).toFixed(1)}× observed`));
   $('btn-superflare').addEventListener('click', () => callbacks.onSuperflare?.());
+  $('btn-earth').addEventListener('click', () => callbacks.onEarthView?.());
+  $('btn-observatory').addEventListener('click', () => callbacks.onObservatory?.());
 
   slider('in-exposure', 'val-exposure',
     (v) => { settings.exposure = v / 100; }, (v) => (v / 100).toFixed(2));
@@ -212,6 +215,16 @@ export function createUI({ settings, callbacks }) {
       els.infoSources.textContent = body.findings.sources;
     }
     renderScenarios(body);
+    renderObservations(body);
+  }
+
+  function renderObservations(body) {
+    const list = OBSERVATIONS[body.id];
+    $('info-obs-wrap').hidden = !list;
+    if (!list) return;
+    $('info-obs').innerHTML = list.map((o) => `<li><span class="obs__when">${o.date} · ${o.facility}</span>`
+      + `<span class="obs__what">${o.what}: ${o.result}</span>`
+      + `<span class="obs__ref">${o.url ? `<a href="${o.url}" target="_blank" rel="noopener">${o.ref}</a>` : o.ref}</span></li>`).join('');
   }
 
   // ------------------------------------------------------------ scenarios
@@ -352,7 +365,7 @@ export function createUI({ settings, callbacks }) {
   }
 
   return {
-    setPaused, setSelected, renderInfo, renderResonance, renderActivity, setSpeed,
+    setPaused, setSelected, renderInfo, renderResonance, renderActivity, setSpeed, setScale,
     updateClock, updateDiagnostics, syncToggles,
   };
 }

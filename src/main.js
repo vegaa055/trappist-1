@@ -15,6 +15,9 @@ import { OrbitControls } from './controls.js';
 import { createUI } from './ui.js';
 import { resonanceState } from './resonance.js';
 import { PLANETS, STAR } from './data.js';
+import { Photometer } from './observe.js';
+import { TransitDetector } from './transits.js';
+import { createObservatory } from './observatory.js';
 
 const canvas = document.getElementById('view');
 const boot = document.getElementById('boot');
@@ -46,6 +49,9 @@ const settings = {
   flareLighting: true,
   thermalView: false,
   showAtmospheres: true,
+  earthView: false,
+  showObservatory: false,
+  lcBand: 'vis',
 
   showOrbits: true,
   showTrails: false,
@@ -116,6 +122,61 @@ const bloom = new UnrealBloomPass(
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
+// ------------------------------------------------------------- observing --
+
+// Transit times (for the TTV plot) and the light curve, both sampled at every
+// integrator step. The boot integration from 2015 feeds the detector too, so
+// the TTV plot opens with the full history.
+const photometer = new Photometer({ band: settings.lcBand });
+const markers = [];
+let detector;
+function resetObservations() {
+  detector = new TransitDetector();
+  detector.listeners.push((id, t) => {
+    markers.push({ id, t });
+    if (markers.length > 400) markers.splice(0, markers.length - 400);
+  });
+  markers.length = 0;
+  photometer.clear();
+}
+let observatory = null;
+resetObservations();
+
+const onStepLive = (nb) => { detector.sample(nb); photometer.sample(nb, world.activity); };
+const onStepBoot = (nb) => detector.sample(nb);
+
+// ------------------------------------------------------------ Earth view --
+// A telescope looking back along our real line of sight (scene +z), far away
+// with a very narrow field so the view is effectively orthographic. Planets
+// are shown at true size while it is active.
+const EARTH_DISTANCE = 2000;            // scene units (2 AU)
+let earthFov = 0.12;                    // degrees
+let savedScale = null;
+
+function setEarthView(on) {
+  if (on === settings.earthView) return;
+  settings.earthView = on;
+  document.getElementById('earth-hud').hidden = !on;
+  document.getElementById('btn-earth').classList.toggle('btn--primary', on);
+  if (on) {
+    savedScale = [settings.planetScale, settings.starScale];
+    ui.setScale(1, 1);
+    settings.following = null;
+    controls.enabled = false;
+  } else {
+    if (savedScale) ui.setScale(...savedScale);
+    controls.enabled = true;
+    camera.fov = 50;
+    camera.updateProjectionMatrix();
+  }
+}
+
+canvas.addEventListener('wheel', (e) => {
+  if (!settings.earthView) return;
+  e.preventDefault();
+  earthFov = Math.min(8, Math.max(0.03, earthFov * Math.exp(e.deltaY * 0.0012)));
+}, { passive: false });
+
 // ---------------------------------------------------------------- focusing --
 
 const focusState = { from: new THREE.Vector3(), to: new THREE.Vector3(), blend: 1 };
@@ -162,6 +223,8 @@ const ui = createUI({
       world.setScenario(id, scenarioId);
       ui.renderInfo(world.describe(id));
     },
+    onEarthView: () => setEarthView(!settings.earthView),
+    onObservatory: () => { settings.showObservatory = !settings.showObservatory; },
     onSuperflare: () => {
       world.activity.trigger(3e33);
       if (settings.daysPerSecond > 0.05) ui.setSpeed(0.02);
@@ -183,6 +246,7 @@ async function jumpTo(jd) {
   if (jd === null || jd < current) {
     const fresh = buildSystem();
     sim.nbody = fresh.nbody;
+    resetObservations();
   }
   if (jd !== null) {
     const span = jd - (sim.epochJD + sim.nbody.time);
@@ -192,8 +256,10 @@ async function jumpTo(jd) {
     }
     await advanceTo(sim, jd, {
       dt: DT_MAX,
+      onStep: onStepBoot,
       onProgress: (f) => { bootFill.style.width = `${(f * 100).toFixed(1)}%`; },
     });
+    photometer.clear();
     boot.classList.add('is-done');
   }
   world.clearTrails();
@@ -239,6 +305,8 @@ window.addEventListener('keydown', (e) => {
     case 'l': settings.showLabels = !settings.showLabels; ui.syncToggles(); break;
     case 'z': settings.showHabitableZone = !settings.showHabitableZone; ui.syncToggles(); break;
     case 'i': settings.thermalView = !settings.thermalView; ui.syncToggles(); break;
+    case 'e': setEarthView(!settings.earthView); break;
+    case 'j': settings.showObservatory = !settings.showObservatory; break;
     default: break;
   }
 });
@@ -272,7 +340,7 @@ function animate() {
   if (!settings.paused && !busy) {
     simDays = settings.daysPerSecond * dtWall;
     if (Math.abs(simDays) > MAX_DAYS_PER_FRAME) simDays = Math.sign(simDays) * MAX_DAYS_PER_FRAME;
-    lastSteps = sim.nbody.advance(simDays, DT_MAX, MAX_SUBSTEPS);
+    lastSteps = sim.nbody.advance(simDays, DT_MAX, MAX_SUBSTEPS, onStepLive);
   } else {
     lastSteps = 0;
   }
@@ -288,9 +356,19 @@ function animate() {
       controls.target.copy(focusState.to);
     }
   }
-  controls.update(dtWall);
+  if (settings.earthView) {
+    camera.fov = earthFov;
+    camera.position.copy(world.starWorld).add(new THREE.Vector3(0, 0, EARTH_DISTANCE));
+    camera.up.set(0, 1, 0);
+    camera.lookAt(world.starWorld);
+    camera.updateProjectionMatrix();
+  } else {
+    controls.update(dtWall);
+  }
 
   world.update(dtWall, camera, simDays);
+  photometer.commit(world.activity);
+  observatory.update(dtWall);
   composer.render(dtWall);
 
   flareTimer -= dtWall;
@@ -334,6 +412,7 @@ requestAnimationFrame(async () => {
     busy = true;
     await advanceTo(sim, julianDayNow(), {
       dt: DT_MAX,
+      onStep: onStepBoot,
       onProgress: (f) => { bootFill.style.width = `${(f * 100).toFixed(1)}%`; },
     });
     busy = false;
@@ -360,4 +439,16 @@ function viewDayside(id, offset = 0.8, elevation = 0.25) {
   controls.spherical.phi = Math.PI / 2 - elevation;
 }
 
-window.trappist = { sim, world, settings, camera, controls, renderer, composer, bloom, viewDayside };
+observatory = createObservatory({
+  settings,
+  photometer,
+  getDetector: () => detector,
+  markers,
+  epochJD: sim.epochJD,
+  onBand: (id) => { settings.lcBand = id; photometer.setBand(id); observatory.setBand(id); },
+});
+
+window.trappist = {
+  sim, world, settings, camera, controls, renderer, composer, bloom, viewDayside, photometer,
+  get detector() { return detector; },
+};

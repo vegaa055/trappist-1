@@ -30,6 +30,16 @@ card then shows the 15 µm dayside temperature that scenario predicts next to
 the JWST value, with the difference in σ. Press `I` for the thermal view: the
 same temperature field, on a fixed 0–600 K scale.
 
+## Observing it
+
+Press `E` to look back along our real line of sight. Planets drop to true size
+and cross the star's disc on their real impact parameters. Press `J` for the
+observatory, which has three tabs:
+- a synthetic light curve sampled every 5.8 simulated minutes (transits, spot
+  modulation and flares, in the visible or near-IR);
+- transit-timing variations from 2015 to now;
+- a timeline of what has been learned.
+
 ## Running it
 
 ES modules need a server:
@@ -60,5 +70,7 @@ TTVs and Laplace angles against Agol et al. 2021. The results are in
 | `space` | pause |
 | `O` / `T` / `L` / `Z` | orbits / trails / labels / habitable zone |
 | `I` | thermal 15 µm view |
+| `E` | view from Earth (scroll to zoom) |
+| `J` | observatory: light curve, TTVs, timeline |
 | `H` | hide the interface |
 | `Esc` | deselect and free the camera |
