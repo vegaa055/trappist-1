@@ -20,7 +20,10 @@ export function createObservatory({ settings, photometer, getDetector, getLaplac
   // ------------------------------------------------------------- tabs
   function selectTab(name) {
     tab = name;
-    for (const b of root.querySelectorAll('.tab')) b.classList.toggle('is-active', b.dataset.tab === name);
+    for (const b of root.querySelectorAll('.tab')) {
+      b.classList.toggle('is-active', b.dataset.tab === name);
+      b.setAttribute('aria-selected', String(b.dataset.tab === name));
+    }
     for (const pane of root.querySelectorAll('[data-pane]')) pane.hidden = pane.dataset.pane !== name;
     $('lc-tools').hidden = name !== 'lc';
     lcTimer = ttvTimer = 0;
@@ -29,7 +32,10 @@ export function createObservatory({ settings, photometer, getDetector, getLaplac
 
   for (const chip of root.querySelectorAll('.chip[data-band]')) {
     chip.addEventListener('click', () => {
-      for (const c of root.querySelectorAll('.chip[data-band]')) c.classList.toggle('is-active', c === chip);
+      for (const c of root.querySelectorAll('.chip[data-band]')) {
+        c.classList.toggle('is-active', c === chip);
+        c.setAttribute('aria-pressed', String(c === chip));
+      }
       onBand(chip.dataset.band);
       lcTimer = 0;
     });

@@ -415,7 +415,34 @@ All six drift together, once per ~491 days. That is Agol's TTV super-period
 turn at that rate, and every pair's conjunctions stack onto exactly p − q
 spokes: three for b–c, two for c–d, one each for the rest.
 
-### Phase 6 — Polish & ship
+### Phase 6 — Polish & ship ✅ built (20 Nov 2026), deploy pending
+
+**What was built**
+- **Narrow screens** (≤ 860 px): the panel starts closed; the info card and
+  observatory share one bottom sheet and close each other; the planet picker
+  runs along the bottom; HUDs move below the masthead. There are also
+  short-height adjustments.
+- **Accessibility**: visible keyboard focus rings, `aria-pressed` on toggles and
+  band chips, `role="tab"` / `aria-selected` on the observatory tabs, labelled
+  canvases, a live region for the tour and info card, and reduced motion
+  respected.
+- **Adaptive quality**: touch devices cap the pixel ratio at 1.5. If the first
+  four seconds run under 40 fps, the page drops to 1× pixels and the cheaper
+  shader paths, once.
+- **Boot time** measured at 2.0 s from load to running (logged to the console).
+  An earlier 6 s reading came from a throttled background tab, so no
+  checkpointing is needed.
+- **Share card**: `og/cover.png`, a real 1200 × 630 frame rendered by `/?cover`
+  and saved through a single-path, localhost-only PUT in `tools/serve.py`.
+  Open Graph and Twitter tags use a `https://SITE_URL/` placeholder until there
+  is an address.
+- **README** rewritten in full; `vercel.json` and `.vercelignore` added.
+
+**Pending**: a GitHub remote and the Vercel deploy. Both publish the project
+publicly, so they wait for an explicit go-ahead. After deploying, replace
+`SITE_URL` in `index.html` (four places).
+
+#### Original plan
 - Performance pass (mobile quality tier), accessibility of the panel.
 - README in the solar-system project's style: physics, shaders, verification
   table, known approximations.

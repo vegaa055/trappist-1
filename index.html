@@ -8,6 +8,29 @@
   <meta name="description"
     content="An interactive 3D model of the TRAPPIST-1 system: seven Earth-sized planets integrated from Agol et al. 2021, with what JWST has found about each one." />
   <meta name="theme-color" content="#07040a" />
+
+  <!-- Share cards. Scrapers do not run JavaScript, so these must be literal, and
+       og:url / og:image must be ABSOLUTE. Replace https://SITE_URL/ with the
+       deployed address (four places) before sharing links. og/cover.png is
+       rendered from the app itself: see og/README.md. -->
+  <link rel="canonical" href="https://SITE_URL/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="TRAPPIST-1" />
+  <meta property="og:title" content="TRAPPIST-1 — seven worlds under real N-body gravity" />
+  <meta property="og:description"
+    content="Seven Earth-sized planets integrated from their measured masses and orbits, each drawn the way JWST's results allow — with the transits, flares and resonances that make them so hard to read." />
+  <meta property="og:url" content="https://SITE_URL/" />
+  <meta property="og:image" content="https://SITE_URL/og/cover.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt"
+    content="A red dwarf star glowing on the left, a line of small planets crossing the sky, and the lit limb of an ocean world on the right, beneath the title TRAPPIST-1." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="TRAPPIST-1 — seven worlds under real N-body gravity" />
+  <meta name="twitter:description"
+    content="Seven Earth-sized planets, real N-body gravity from their measured masses, and what JWST has found about each one." />
+  <meta name="twitter:image" content="https://SITE_URL/og/cover.png" />
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='6' fill='%23ff7a3a'/><circle cx='16' cy='16' r='10' fill='none' stroke='%236fd3a0' stroke-width='1'/><circle cx='16' cy='16' r='14' fill='none' stroke='%238b9cff' stroke-width='1'/></svg>" />
   <link rel="stylesheet" href="./styles.css" />
@@ -15,7 +38,7 @@
 
 <body>
   <div id="app">
-    <canvas id="view"></canvas>
+    <canvas id="view" aria-label="3D view of the TRAPPIST-1 system"></canvas>
     <div id="labels" class="label-layer"></div>
 
     <header class="masthead">
@@ -172,7 +195,7 @@
 
     <button class="panel__open" id="panel-open" type="button" aria-label="Open panel">☰</button>
 
-    <section class="info" id="info" hidden>
+    <section class="info" id="info" aria-live="polite" hidden>
       <header class="info__head">
         <h2 id="info-name">—</h2>
         <button class="info__close" id="info-close" type="button" aria-label="Close">×</button>
@@ -196,13 +219,13 @@
       </div>
     </section>
 
-    <section class="observatory" id="observatory" hidden>
+    <section class="observatory" id="observatory" aria-label="Observatory" hidden>
       <header class="observatory__head">
-        <div class="tabs" role="tablist">
-          <button class="tab is-active" type="button" data-tab="lc">Light curve</button>
-          <button class="tab" type="button" data-tab="ttv">Transit timing</button>
-          <button class="tab" type="button" data-tab="laplace">Resonances</button>
-          <button class="tab" type="button" data-tab="timeline">Timeline</button>
+        <div class="tabs" role="tablist" aria-label="Observatory views">
+          <button class="tab is-active" type="button" role="tab" aria-selected="true" data-tab="lc">Light curve</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="ttv">Transit timing</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="laplace">Resonances</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="timeline">Timeline</button>
         </div>
         <div class="observatory__tools" id="lc-tools">
           <button class="chip is-active" type="button" data-band="vis">visible</button>
@@ -211,18 +234,18 @@
         <button class="info__close" id="observatory-close" type="button" aria-label="Close">×</button>
       </header>
       <div class="observatory__pane" data-pane="lc">
-        <canvas class="observatory__canvas" id="lc-canvas"></canvas>
+        <canvas class="observatory__canvas" id="lc-canvas" role="img" aria-label="Synthetic light curve of TRAPPIST-1"></canvas>
         <p class="observatory__note" id="lc-note"></p>
         <p class="observatory__note muted" id="lc-depths"></p>
       </div>
       <div class="observatory__pane" data-pane="ttv" hidden>
-        <canvas class="observatory__canvas" id="ttv-canvas"></canvas>
+        <canvas class="observatory__canvas" id="ttv-canvas" role="img" aria-label="Transit-timing variations since 2015"></canvas>
         <p class="observatory__note">Observed minus predicted transit times against a straight-line ephemeris, from the
           2015 epoch to now. The planets tug each other early and late on a ~490-day cycle — this is how their masses were
           measured. Click a legend entry to hide a planet.</p>
       </div>
       <div class="observatory__pane" data-pane="laplace" hidden>
-        <canvas class="observatory__canvas" id="lap-canvas"></canvas>
+        <canvas class="observatory__canvas" id="lap-canvas" role="img" aria-label="Laplace angles since 2015"></canvas>
         <p class="observatory__note">The five Laplace angles φ = pλ₁ − (p+q)λ₂ + qλ₃, sampled daily since 2015. Circulating
           angles would sweep through all 360°; these stay in narrow bands, which is what being locked in resonance
           means.</p>
@@ -230,7 +253,7 @@
       <ol class="timeline observatory__pane" data-pane="timeline" id="timeline" hidden></ol>
     </section>
 
-    <section class="tour" id="tour" hidden>
+    <section class="tour" id="tour" aria-live="polite" aria-label="Guided tour" hidden>
       <header class="tour__head">
         <span class="tour__step" id="tour-step"></span>
         <button class="info__close" id="tour-close" type="button" aria-label="Close tour">×</button>

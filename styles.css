@@ -640,3 +640,42 @@ body.ui-hidden .observatory, body.ui-hidden .earth-hud { display: none; }
 .surface-hud .diag dd { text-align: right; }
 .surface-hud__hint { margin-top: 4px; font-size: 10px; color: var(--ink-faint); }
 body.ui-hidden .tour, body.ui-hidden .surface-hud { display: none; }
+
+/* ------------------------------------------------------ Phase 6: layout -- */
+/* Keyboard focus is visible everywhere; mouse clicks do not leave rings. */
+:focus { outline: none; }
+:focus-visible { outline: 2px solid #9fc0ff; outline-offset: 2px; border-radius: 6px; }
+input[type="range"]:focus-visible { outline-offset: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .boot__spinner { animation: none; }
+  .masthead, .panel, .bodies, .info, .help, .panel__open, .label-layer { transition: none; }
+}
+
+/* Narrow screens: one bottom sheet at a time (info card or observatory),
+   the planet picker as a row along the bottom, HUDs below the masthead. */
+@media (max-width: 860px) {
+  .masthead__sub { display: none; }
+  .clock { margin-top: 6px; }
+  .clock__date { font-size: 12.5px; }
+
+  .bodies { bottom: 10px; }
+  .info { left: 10px; right: 10px; width: auto; bottom: 58px; max-height: 48vh; }
+  .observatory { left: 10px; right: 10px; width: auto; bottom: 58px; padding: 8px 10px 6px; }
+  .observatory__canvas { height: 140px; }
+  .observatory__note { font-size: 10px; }
+  .legend { bottom: 58px; }
+
+  .tour { top: 64px; padding: 10px 12px 8px; }
+  .tour__title { font-size: 14.5px; }
+  .tour__text { font-size: 12px; }
+  .surface-hud, .earth-hud { top: 64px; }
+  .earth-hud { white-space: normal; text-align: center; width: calc(100vw - 32px); }
+  .surface-hud .diag { font-size: 10px; }
+}
+
+@media (max-height: 560px) {
+  .observatory__canvas { height: 110px; }
+  .info { max-height: 60vh; }
+  .tour { top: 12px; }
+}

@@ -113,7 +113,10 @@ export function createUI({ settings, callbacks }) {
     toggleButtons.set(key, btn);
   }
   const syncToggles = () => {
-    for (const [key, btn] of toggleButtons) btn.classList.toggle('is-on', !!settings[key]);
+    for (const [key, btn] of toggleButtons) {
+      btn.classList.toggle('is-on', !!settings[key]);
+      btn.setAttribute('aria-pressed', String(!!settings[key]));
+    }
     $('thermal-legend').hidden = !settings.thermalView;
   };
   syncToggles();

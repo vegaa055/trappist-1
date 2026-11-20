@@ -22,6 +22,7 @@ import { SurfaceView } from './surface.js';
 import { TransitChimes } from './sound.js';
 import { createTour } from './tour.js';
 
+const T_START = performance.now();
 const canvas = document.getElementById('view');
 const boot = document.getElementById('boot');
 const bootText = document.getElementById('boot-text');
@@ -89,7 +90,10 @@ try {
   throw err;
 }
 
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+// Touch devices get a lower pixel-ratio cap up front; everyone gets the
+// adaptive drop below if the first seconds run slow.
+const COARSE = window.matchMedia?.('(pointer: coarse)').matches;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, COARSE ? 1.5 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
@@ -263,6 +267,7 @@ canvas.addEventListener('wheel', (e) => {
 const focusState = { from: new THREE.Vector3(), to: new THREE.Vector3(), blend: 1 };
 
 function focusBody(id, { frame = true } = {}) {
+  if (id && isNarrow()) settings.showObservatory = false;
   settings.selected = id;
   settings.following = id;
   ui.setSelected(id);
@@ -311,7 +316,7 @@ const ui = createUI({
       document.getElementById('btn-chimes').classList.toggle('btn--primary', chimes.enabled);
     },
     onTour: () => tour.start(),
-    onObservatory: () => { settings.showObservatory = !settings.showObservatory; },
+    onObservatory: () => openObservatory(),
     onSuperflare: () => {
       world.activity.trigger(3e33);
       if (settings.daysPerSecond > 0.05) ui.setSpeed(0.02);
@@ -320,6 +325,21 @@ const ui = createUI({
   },
 });
 ui.setPaused(settings.paused);
+
+const isNarrow = () => window.innerWidth <= 860;
+if (isNarrow()) {
+  document.getElementById('panel').hidden = true;
+  document.getElementById('panel-open').classList.add('is-visible');
+}
+
+/** On a narrow screen the info card and the observatory share one sheet. */
+function openObservatory(on = !settings.showObservatory) {
+  settings.showObservatory = on;
+  if (on && isNarrow() && settings.selected) {
+    settings.selected = null;
+    ui.setSelected(null);
+  }
+}
 
 /**
  * Re-seed from the 2015 epoch and integrate forward to `jd` (or stay at the
@@ -395,7 +415,7 @@ window.addEventListener('keydown', (e) => {
     case 'z': settings.showHabitableZone = !settings.showHabitableZone; ui.syncToggles(); break;
     case 'i': settings.thermalView = !settings.thermalView; ui.syncToggles(); break;
     case 'e': setEarthView(!settings.earthView); break;
-    case 'j': settings.showObservatory = !settings.showObservatory; break;
+    case 'j': openObservatory(); break;
     case 'g': if (tour.active) tour.close(); else tour.start(); break;
     case 'u': ui.callbacks.onSurface(); break;
     case 'r': ui.callbacks.onCorotate(); break;
@@ -421,6 +441,7 @@ onResize();
 // ------------------------------------------------------------------- loop --
 
 const clock = new THREE.Clock();
+let bootMs = 0;
 let fpsAccum = 0, fpsFrames = 0;
 let lastSteps = 0;
 let infoTimer = 0;
@@ -428,9 +449,31 @@ let resTimer = 0;
 let flareTimer = 0;
 let surfaceTimer = 0;
 
+/**
+ * Adaptive quality: measure the first four seconds after boot; if the frame
+ * rate is under 40, drop to 1× pixels and the cheaper shader paths once.
+ */
+const quality = { t: 0, frames: 0, done: false };
+function adaptQuality(dtWall) {
+  if (quality.done || document.hidden) return;
+  quality.t += dtWall;
+  quality.frames++;
+  if (quality.t < 4) return;
+  quality.done = true;
+  const fps = quality.frames / quality.t;
+  if (fps < 40) {
+    renderer.setPixelRatio(1);
+    settings.highDetail = false;
+    ui.syncToggles();
+    onResize();
+    console.info(`[trappist-1] ${fps.toFixed(0)} fps: switched to reduced quality`);
+  }
+}
+
 function animate() {
   requestAnimationFrame(animate);
   const dtWall = Math.min(clock.getDelta(), 0.1);
+  adaptQuality(dtWall);
 
   let simDays = 0;
   if (!settings.paused && !busy) {
@@ -523,7 +566,15 @@ requestAnimationFrame(async () => {
       onProgress: (f) => { bootFill.style.width = `${(f * 100).toFixed(1)}%`; },
     });
     busy = false;
+    bootMs = performance.now() - T_START;
+    console.info(`[trappist-1] integrated 2015 → today and ready in ${(bootMs / 1000).toFixed(1)} s`);
     clock.getDelta();
+    if (new URLSearchParams(location.search).has('cover')) {
+      const { makeCover } = await import('./cover.js');
+      await makeCover({ renderer, composer, camera, world, settings, ui });
+      boot.classList.add('is-done');
+      return;
+    }
     animate();
     requestAnimationFrame(() => boot.classList.add('is-done'));
   } catch (err) {
@@ -588,7 +639,7 @@ const tour = createTour({
     setSurface,
     setResonanceView,
     setScenario: (id, sc) => world.setScenario(id, sc),
-    openObservatory: (tab) => { settings.showObservatory = true; observatory.selectTab(tab); },
+    openObservatory: (tab) => { openObservatory(true); observatory.selectTab(tab); },
     superflare: () => world.activity.trigger(3e33),
   },
 });
@@ -596,4 +647,5 @@ const tour = createTour({
 window.trappist = {
   sim, world, settings, camera, controls, renderer, composer, bloom, viewDayside, photometer, surface, tour,
   get detector() { return detector; },
+  get bootMs() { return bootMs; },
 };
